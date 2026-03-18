@@ -13,6 +13,7 @@ from sigil_ml import config
 from sigil_ml.models.stuck import StuckPredictor
 from sigil_ml.models.suggest import SuggestionPolicy
 from sigil_ml.models.duration import DurationEstimator
+from sigil_ml.models.quality import QualityEstimator
 
 logger = logging.getLogger("sigil_ml")
 
@@ -23,14 +24,16 @@ app = FastAPI(title="sigil-ml", version="0.1.0")
 _stuck: StuckPredictor | None = None
 _suggest: SuggestionPolicy | None = None
 _duration: DurationEstimator | None = None
+_quality: QualityEstimator | None = None
 _training_in_progress = False
 
 
 def _load_models() -> None:
-    global _stuck, _suggest, _duration
+    global _stuck, _suggest, _duration, _quality
     _stuck = StuckPredictor()
     _suggest = SuggestionPolicy()
     _duration = DurationEstimator()
+    _quality = QualityEstimator()
 
 
 @app.on_event("startup")
@@ -72,6 +75,17 @@ class DurationResponse(BaseModel):
     confidence_interval: list[float]
 
 
+class QualityRequest(BaseModel):
+    features: dict[str, float]
+
+
+class QualityResponse(BaseModel):
+    score: int
+    components: dict[str, float]
+    status: str
+    suggestion: str | None = None
+
+
 class TrainRequest(BaseModel):
     db: str | None = Field(None, description="Override path to SQLite database")
 
@@ -110,6 +124,9 @@ async def health() -> HealthResponse:
 
     if _duration is not None:
         models_status["duration"] = "ready" if _duration.is_trained else "untrained"
+
+    if _quality is not None:
+        models_status["quality"] = "ready"
     else:
         models_status["duration"] = "not_loaded"
 
@@ -169,6 +186,21 @@ async def predict_duration(req: DurationRequest) -> DurationResponse:
 
     result = _duration.predict(features)
     return DurationResponse(**result)
+
+
+@app.post("/predict/quality", response_model=QualityResponse)
+async def predict_quality(req: QualityRequest) -> QualityResponse:
+    """Compute rolling work quality score."""
+    if _quality is None:
+        return QualityResponse(score=50, components={}, status="normal")
+
+    result = _quality.predict(req.features)
+    return QualityResponse(
+        score=result["score"],
+        components=result["components"],
+        status=result["status"],
+        suggestion=result.get("suggestion"),
+    )
 
 
 def _run_training(db_path: str) -> None:

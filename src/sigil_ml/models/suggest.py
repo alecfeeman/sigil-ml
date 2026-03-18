@@ -16,6 +16,12 @@ ACTIONS = [
     "suggest_next_task",
     "suggest_test",
     "positive_reinforcement",
+    # Time/process-based actions
+    "suggest_break",
+    "suggest_commit_split",
+    "suggest_switch_task",
+    "suggest_run_tests_now",
+    "suggest_wrap_up",
 ]
 
 
