@@ -103,25 +103,33 @@ class EventPoller:
         finally:
             conn.close()
 
+    # Fallback predictions for untrained models.
+    _FALLBACK_STUCK = {"probability": 0.5, "confidence": "weak"}
+    _FALLBACK_SUGGEST = {"action": "stay_silent", "confidence": 0.5}
+    _FALLBACK_DURATION = {"estimated_minutes": 60.0, "confidence_interval": [30.0, 90.0]}
+
     def _predict_and_write(self, conn: sqlite3.Connection) -> None:
         start = time.time()
         task_id = self._active_task_id(conn)
 
-        # Stuck prediction
-        if task_id:
-            feats = extract_stuck_features(self.db_path, task_id)
+        # Stuck prediction — check is_trained before calling predict.
+        if self.stuck.is_trained:
+            if task_id:
+                feats = extract_stuck_features(self.db_path, task_id)
+            else:
+                feats = extract_features_from_buffer(self._buffer)
+            result = self.stuck.predict(feats)
         else:
-            feats = extract_features_from_buffer(self._buffer)
-        result = self.stuck.predict(feats)
-        self._write(conn, "stuck", result, result.get("probability", 0.0), PREDICTION_TTL_SEC)
+            result = self._FALLBACK_STUCK
+        self._write(conn, "stuck", result, result.get("probability", 0.5), PREDICTION_TTL_SEC)
 
-        # Suggestion policy
+        # Suggestion policy — always callable (Thompson sampling works from priors).
         state = extract_suggest_features(self.db_path, task_id) if task_id else None
         result = self.suggest.predict(state)
-        self._write(conn, "suggest", result, result.get("confidence", 0.0), PREDICTION_TTL_SEC)
+        self._write(conn, "suggest", result, result.get("confidence", 0.5), PREDICTION_TTL_SEC)
 
-        # Duration (only when there is an active task)
-        if task_id:
+        # Duration — only when active task AND model is trained.
+        if task_id and self.duration.is_trained:
             try:
                 feats = extract_duration_features(self.db_path, task_id)
                 result = self.duration.predict(feats)
@@ -132,8 +140,10 @@ class EventPoller:
                 self._write(conn, "duration", result, conf, None)
             except Exception:
                 logger.debug("poller: duration prediction skipped", exc_info=True)
+        elif task_id:
+            self._write(conn, "duration", self._FALLBACK_DURATION, 0.5, None)
 
-        # Quality score
+        # Quality score — always callable (rule-based, no training required).
         qfeats = self._quality_features(conn)
         result = self.quality.predict(qfeats)
         self._write(conn, "quality", result, result.get("score", 50) / 100.0, QUALITY_TTL_SEC)
