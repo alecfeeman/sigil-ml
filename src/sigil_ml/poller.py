@@ -20,10 +20,11 @@ from sigil_ml.features import (
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SEC = 0.5
-PREDICT_EVERY_N_EVENTS = 3
-QUALITY_WINDOW_SEC = 1800   # 30-minute rolling window
-PREDICTION_TTL_SEC = 300    # 5-minute expiry for stuck/suggest
-QUALITY_TTL_SEC = 1800      # 30-minute expiry for quality
+PREDICT_EVERY_N_EVENTS = 3       # minimum events before predicting
+PREDICT_MIN_INTERVAL_SEC = 60    # minimum seconds between prediction cycles
+QUALITY_WINDOW_SEC = 1800        # 30-minute rolling window for quality features
+PREDICTION_TTL_SEC = 90          # 90-second expiry for stuck/suggest (stale after ~1 cycle)
+QUALITY_TTL_SEC = 120            # 2-minute expiry for quality
 
 
 class EventPoller:
@@ -37,6 +38,7 @@ class EventPoller:
         self.quality = models["quality"]
         self._buffer: list[dict] = []
         self._since_last_predict = 0
+        self._last_predict_time = 0.0
         self._running = False
 
     async def run(self) -> None:
@@ -95,9 +97,11 @@ class EventPoller:
                 (max_id, int(time.time() * 1000)),
             )
 
-            if self._since_last_predict >= PREDICT_EVERY_N_EVENTS:
+            elapsed = time.time() - self._last_predict_time
+            if self._since_last_predict >= PREDICT_EVERY_N_EVENTS and elapsed >= PREDICT_MIN_INTERVAL_SEC:
                 self._predict_and_write(conn)
                 self._since_last_predict = 0
+                self._last_predict_time = time.time()
 
             conn.commit()
         finally:
