@@ -33,7 +33,8 @@ class TestHealthEndpoint:
         data = resp.json()
         models = data["models"]
         assert "stuck" in models
-        assert "suggest" in models
+        assert "activity" in models
+        assert "workflow" in models
         assert "duration" in models
         # Models should be untrained since we use a clean temp dir
         assert models["stuck"] == "untrained"
@@ -67,21 +68,31 @@ class TestStuckEndpoint:
 
 
 class TestSuggestEndpoint:
-    def test_predict_with_state(self, client: TestClient) -> None:
-        resp = client.post("/predict/suggest", json={
-            "state": {"phase_coding": 1.0, "time_in_phase_sec": 600}
-        })
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "action" in data
-        assert "confidence" in data
-
-    def test_predict_no_input(self, client: TestClient) -> None:
+    def test_predict_returns_workflow_state(self, client: TestClient) -> None:
         resp = client.post("/predict/suggest", json={})
         assert resp.status_code == 200
         data = resp.json()
-        from sigil_ml.models.suggest import ACTIONS
-        assert data["action"] in ACTIONS
+        assert "flow_state" in data
+        assert "dominant_state" in data
+        assert "momentum" in data
+        assert "focus_score" in data
+        assert "method" in data
+        assert "confidence" in data
+        # Flow state should have all 5 states.
+        from sigil_ml.models.workflow import FLOW_STATES
+        for state in FLOW_STATES:
+            assert state in data["flow_state"]
+
+    def test_predict_with_classified_events(self, client: TestClient) -> None:
+        from sigil_ml.models.workflow import FLOW_STATES
+        events = [
+            {"kind": "file", "_category": "editing", "ts": 1000},
+            {"kind": "terminal", "_category": "verifying", "ts": 2000},
+        ]
+        resp = client.post("/predict/suggest", json={"classified_events": events})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["dominant_state"] in FLOW_STATES
 
 
 class TestDurationEndpoint:

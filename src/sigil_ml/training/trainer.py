@@ -9,7 +9,6 @@ from pathlib import Path
 import numpy as np
 
 from sigil_ml.models.stuck import StuckPredictor, FEATURE_NAMES as STUCK_FEATURES
-from sigil_ml.models.suggest import SuggestionPolicy
 from sigil_ml.models.duration import DurationEstimator, FEATURE_NAMES as DURATION_FEATURES
 from sigil_ml.features import (
     extract_stuck_features,
@@ -39,11 +38,6 @@ class Trainer:
         if stuck_result:
             trained.append("stuck")
             total_samples += stuck_result
-
-        suggest_result = self._train_suggest()
-        if suggest_result:
-            trained.append("suggest")
-            total_samples += suggest_result
 
         duration_result = self._train_duration()
         if duration_result:
@@ -105,47 +99,6 @@ class Trainer:
         predictor = StuckPredictor()
         predictor.train(X, y)
         return len(X)
-
-    def _train_suggest(self) -> int:
-        """Train the suggestion policy from feedback data.
-
-        Returns:
-            Number of feedback entries used, or 0 if none.
-        """
-        if not self.db_path.exists():
-            return 0
-
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        try:
-            # Look for suggestion_feedback events
-            rows = conn.execute(
-                "SELECT payload FROM events WHERE kind = 'suggestion_feedback'"
-            ).fetchall()
-        finally:
-            conn.close()
-
-        if not rows:
-            logger.info("No suggestion feedback found for training")
-            return 0
-
-        history = []
-        for row in rows:
-            try:
-                payload = json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
-                if isinstance(payload, dict) and "action" in payload:
-                    history.append({
-                        "action": payload["action"],
-                        "reward": float(payload.get("reward", 0.0)),
-                    })
-            except (json.JSONDecodeError, TypeError, ValueError):
-                continue
-
-        if history:
-            policy = SuggestionPolicy()
-            policy.train(history)
-
-        return len(history)
 
     def _train_duration(self) -> int:
         """Train the duration estimator from completed tasks.

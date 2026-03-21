@@ -1,6 +1,6 @@
 """Event poller — continuous push-to-db prediction loop.
 
-Polls events → runs models → writes to ml_predictions.
+Polls events → classifies activity → runs models → writes to ml_predictions.
 Runs as an asyncio background task inside the FastAPI process.
 """
 import asyncio
@@ -12,7 +12,6 @@ from pathlib import Path
 
 from sigil_ml.features import (
     extract_stuck_features,
-    extract_suggest_features,
     extract_duration_features,
     extract_features_from_buffer,
 )
@@ -23,7 +22,7 @@ POLL_INTERVAL_SEC = 0.5
 PREDICT_EVERY_N_EVENTS = 3       # minimum events before predicting
 PREDICT_MIN_INTERVAL_SEC = 60    # minimum seconds between prediction cycles
 QUALITY_WINDOW_SEC = 1800        # 30-minute rolling window for quality features
-PREDICTION_TTL_SEC = 90          # 90-second expiry for stuck/suggest (stale after ~1 cycle)
+PREDICTION_TTL_SEC = 90          # 90-second expiry for stuck/activity/workflow
 QUALITY_TTL_SEC = 120            # 2-minute expiry for quality
 
 
@@ -33,7 +32,8 @@ class EventPoller:
     def __init__(self, db_path: Path, models: dict) -> None:
         self.db_path = db_path
         self.stuck = models["stuck"]
-        self.suggest = models["suggest"]
+        self.activity = models["activity"]
+        self.workflow = models["workflow"]
         self.duration = models["duration"]
         self.quality = models["quality"]
         self._buffer: list[dict] = []
@@ -85,10 +85,16 @@ class EventPoller:
                         e["payload"] = json.loads(e["payload"])
                     except (json.JSONDecodeError, TypeError):
                         pass
+
+                # Classify each event as it enters the buffer.
+                classification = self.activity.classify(e)
+                e["_category"] = classification["category"]
+                e["_category_confidence"] = classification["confidence"]
+
                 events.append(e)
 
             self._buffer.extend(events)
-            self._buffer = self._buffer[-50:]  # keep last 50
+            self._buffer = self._buffer[-200:]  # keep last 200
             self._since_last_predict += len(events)
 
             max_id = max(e["id"] for e in events)
@@ -109,7 +115,20 @@ class EventPoller:
 
     # Fallback predictions for untrained models.
     _FALLBACK_STUCK = {"probability": 0.5, "confidence": "weak"}
-    _FALLBACK_SUGGEST = {"action": "stay_silent", "confidence": 0.5}
+    _FALLBACK_WORKFLOW = {
+        "flow_state": {
+            "deep_work": 0.0, "shallow_work": 1.0,
+            "exploring": 0.0, "blocked": 0.0, "winding_down": 0.0,
+        },
+        "dominant_state": "shallow_work",
+        "momentum": 0.0,
+        "focus_score": 0.5,
+        "dominant_activity": "idle",
+        "activity_distribution": {},
+        "session_elapsed_min": 0.0,
+        "method": "rules",
+        "confidence": 0.5,
+    }
     _FALLBACK_DURATION = {"estimated_minutes": 60.0, "confidence_interval": [30.0, 90.0]}
 
     def _predict_and_write(self, conn: sqlite3.Connection) -> None:
@@ -127,9 +146,13 @@ class EventPoller:
             result = self._FALLBACK_STUCK
         self._write(conn, "stuck", result, result.get("probability", 0.5), PREDICTION_TTL_SEC)
 
-        # Suggestion policy — always callable (Thompson sampling works from priors).
-        state = extract_suggest_features(self.db_path, task_id) if task_id else None
-        result = self.suggest.predict(state)
+        # Activity summary — classify and summarize the buffer.
+        activity_result = self._activity_summary()
+        self._write(conn, "activity", activity_result, activity_result.get("confidence", 0.5), PREDICTION_TTL_SEC)
+
+        # Workflow state prediction — replaces old suggestion policy.
+        session_info = self._session_info(conn, task_id)
+        result = self.workflow.predict(self._buffer, session_info)
         self._write(conn, "suggest", result, result.get("confidence", 0.5), PREDICTION_TTL_SEC)
 
         # Duration — only when active task AND model is trained.
@@ -159,6 +182,55 @@ class EventPoller:
             "VALUES ('prediction', 'poller', 'local', ?, ?)",
             (latency_ms, int(time.time() * 1000)),
         )
+
+    def _activity_summary(self) -> dict:
+        """Build activity summary from classified buffer events."""
+        window_summary: dict[str, int] = {}
+        for e in self._buffer:
+            cat = e.get("_category", "idle")
+            window_summary[cat] = window_summary.get(cat, 0) + 1
+
+        recent = [
+            {"ts": e.get("ts", 0), "kind": e.get("kind", ""), "category": e.get("_category", "idle")}
+            for e in self._buffer[-10:]
+        ]
+
+        dominant = max(window_summary, key=window_summary.get) if window_summary else "idle"
+
+        # Average confidence of classifications.
+        confidences = [e.get("_category_confidence", 0.5) for e in self._buffer]
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.5
+
+        return {
+            "window_summary": window_summary,
+            "recent": recent,
+            "dominant": dominant,
+            "method": "rules",
+            "confidence": round(avg_conf, 4),
+        }
+
+    def _session_info(self, conn: sqlite3.Connection, task_id: str | None) -> dict:
+        """Build session info for WorkflowStatePredictor."""
+        session_elapsed_min = 0.0
+        task_phase = None
+        test_failures = 0
+
+        if task_id:
+            row = conn.execute(
+                "SELECT started_at, phase, test_fails FROM tasks WHERE id = ?",
+                (task_id,),
+            ).fetchone()
+            if row:
+                started_at = row[0] or 0
+                session_elapsed_min = (time.time() * 1000 - started_at) / 60000.0
+                task_phase = row[1]
+                test_failures = row[2] or 0
+
+        return {
+            "session_elapsed_min": max(session_elapsed_min, 0.0),
+            "task_phase": task_phase,
+            "test_failures": test_failures,
+        }
 
     def _write(
         self,

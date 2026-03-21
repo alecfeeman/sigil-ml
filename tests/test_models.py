@@ -107,45 +107,6 @@ class TestStuckPredictor:
         assert pred1["probability"] == pred2["probability"]
 
 
-class TestSuggestionPolicy:
-    def test_untrained_predict(self) -> None:
-        from sigil_ml.models.suggest import SuggestionPolicy
-        policy = SuggestionPolicy()
-        result = policy.predict({})
-        from sigil_ml.models.suggest import ACTIONS
-        assert result["action"] in ACTIONS
-        assert 0.0 <= result["confidence"] <= 1.0
-
-    def test_update_shifts_distribution(self) -> None:
-        from sigil_ml.models.suggest import SuggestionPolicy
-        policy = SuggestionPolicy()
-
-        # Heavily reward "suggest_commit"
-        for _ in range(50):
-            policy.update("suggest_commit", 1.0)
-
-        # After many positive rewards, suggest_commit should be favored
-        action_counts: dict[str, int] = {}
-        for _ in range(100):
-            result = policy.predict({})
-            action_counts[result["action"]] = action_counts.get(result["action"], 0) + 1
-
-        assert action_counts.get("suggest_commit", 0) > 50
-
-    def test_train_batch(self) -> None:
-        from sigil_ml.models.suggest import SuggestionPolicy
-        policy = SuggestionPolicy()
-        history = [
-            {"action": "suggest_test", "reward": 1.0},
-            {"action": "suggest_test", "reward": 1.0},
-            {"action": "suggest_test", "reward": 1.0},
-            {"action": "stay_silent", "reward": 0.0},
-            {"action": "stay_silent", "reward": 0.0},
-        ]
-        policy.train(history)
-        assert policy.alphas["suggest_test"] > policy.alphas["stay_silent"]
-
-
 class TestActivityClassifier:
     def test_file_event_classifies_as_editing(self) -> None:
         from sigil_ml.models.activity import ActivityClassifier
