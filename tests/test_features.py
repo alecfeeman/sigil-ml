@@ -12,7 +12,6 @@ from sigil_ml.features import (
     _query_task,
     _query_events_for_task,
     extract_stuck_features,
-    extract_suggest_features,
     extract_duration_features,
 )
 
@@ -146,28 +145,6 @@ class TestStuckFeatures:
         features = extract_stuck_features(test_db, "task-1")
         # We have edits to main.py and utils.py
         assert 0.0 < features["file_switch_rate"] <= 1.0
-
-
-class TestSuggestFeatures:
-    def test_basic_extraction(self, test_db: Path) -> None:
-        features = extract_suggest_features(test_db, "task-1")
-        assert features["phase_coding"] == 1.0
-        assert features["phase_testing"] == 0.0
-        assert features["test_failures"] == 3.0
-        assert features["files_touched"] == 2.0
-        assert features["session_length_sec"] > 0
-
-    def test_hour_encoding(self, test_db: Path) -> None:
-        features = extract_suggest_features(test_db, "task-1")
-        sin_val = features["hour_of_day_sin"]
-        cos_val = features["hour_of_day_cos"]
-        # sin^2 + cos^2 should be ~1
-        assert abs(sin_val**2 + cos_val**2 - 1.0) < 0.01
-
-    def test_missing_task(self, test_db: Path) -> None:
-        features = extract_suggest_features(test_db, "nonexistent")
-        assert all(features[f"phase_{p}"] == 0.0 for p in
-                    ["planning", "coding", "testing", "debugging", "reviewing", "other"])
 
 
 class TestDurationFeatures:

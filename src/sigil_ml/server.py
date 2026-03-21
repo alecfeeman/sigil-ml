@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 
 from sigil_ml import config
 from sigil_ml.models.stuck import StuckPredictor
-from sigil_ml.models.suggest import SuggestionPolicy
+from sigil_ml.models.activity import ActivityClassifier
+from sigil_ml.models.workflow import WorkflowStatePredictor
 from sigil_ml.models.duration import DurationEstimator
 from sigil_ml.models.quality import QualityEstimator
 from sigil_ml.schema import ensure_ml_tables
@@ -26,7 +27,8 @@ app = FastAPI(title="sigil-ml", version="0.1.0")
 # ---------- Global model instances ----------
 
 _stuck: StuckPredictor | None = None
-_suggest: SuggestionPolicy | None = None
+_activity: ActivityClassifier | None = None
+_workflow: WorkflowStatePredictor | None = None
 _duration: DurationEstimator | None = None
 _quality: QualityEstimator | None = None
 _poller: EventPoller | None = None
@@ -34,9 +36,10 @@ _training_in_progress = False
 
 
 def _load_models() -> None:
-    global _stuck, _suggest, _duration, _quality
+    global _stuck, _activity, _workflow, _duration, _quality
     _stuck = StuckPredictor()
-    _suggest = SuggestionPolicy()
+    _activity = ActivityClassifier()
+    _workflow = WorkflowStatePredictor()
     _duration = DurationEstimator()
     _quality = QualityEstimator()
 
@@ -46,7 +49,8 @@ def _reload_models_into_poller() -> None:
     _load_models()
     if _poller:
         _poller.stuck = _stuck
-        _poller.suggest = _suggest
+        _poller.activity = _activity
+        _poller.workflow = _workflow
         _poller.duration = _duration
         _poller.quality = _quality
     logger.info("models reloaded into poller")
@@ -71,7 +75,8 @@ async def startup_event() -> None:
         db_path=db,
         models={
             "stuck": _stuck,
-            "suggest": _suggest,
+            "activity": _activity,
+            "workflow": _workflow,
             "duration": _duration,
             "quality": _quality,
         },
@@ -113,13 +118,20 @@ class StuckResponse(BaseModel):
     confidence: str
 
 
-class SuggestRequest(BaseModel):
+class WorkflowStateRequest(BaseModel):
     task_id: str | None = None
-    state: dict[str, float] | None = None
+    classified_events: list[dict] | None = None
 
 
-class SuggestResponse(BaseModel):
-    action: str
+class WorkflowStateResponse(BaseModel):
+    flow_state: dict[str, float]
+    dominant_state: str
+    momentum: float
+    focus_score: float
+    dominant_activity: str
+    activity_distribution: dict[str, float]
+    session_elapsed_min: float
+    method: str
     confidence: float
 
 
@@ -174,18 +186,25 @@ async def health() -> HealthResponse:
     else:
         models_status["stuck"] = "not_loaded"
 
-    if _suggest is not None:
-        models_status["suggest"] = "ready" if _suggest.is_trained else "untrained"
+    if _activity is not None:
+        models_status["activity"] = "ready" if _activity.is_trained else "untrained"
     else:
-        models_status["suggest"] = "not_loaded"
+        models_status["activity"] = "not_loaded"
+
+    if _workflow is not None:
+        models_status["workflow"] = "ready" if _workflow.is_trained else "untrained"
+    else:
+        models_status["workflow"] = "not_loaded"
 
     if _duration is not None:
         models_status["duration"] = "ready" if _duration.is_trained else "untrained"
+    else:
+        models_status["duration"] = "not_loaded"
 
     if _quality is not None:
         models_status["quality"] = "ready"
     else:
-        models_status["duration"] = "not_loaded"
+        models_status["quality"] = "not_loaded"
 
     return HealthResponse(
         status="ok",
@@ -241,19 +260,31 @@ async def predict_stuck(req: StuckRequest) -> StuckResponse:
     return StuckResponse(**result)
 
 
-@app.post("/predict/suggest", response_model=SuggestResponse)
-async def predict_suggest(req: SuggestRequest) -> SuggestResponse:
-    """Get a suggestion for the developer."""
-    if _suggest is None:
-        return SuggestResponse(action="stay_silent", confidence=0.5)
+@app.post("/predict/suggest", response_model=WorkflowStateResponse)
+async def predict_suggest(req: WorkflowStateRequest) -> WorkflowStateResponse:
+    """Get workflow state assessment for generating suggestions."""
+    if _workflow is None:
+        return WorkflowStateResponse(
+            flow_state={"shallow_work": 1.0, "deep_work": 0.0, "exploring": 0.0, "blocked": 0.0, "winding_down": 0.0},
+            dominant_state="shallow_work",
+            momentum=0.0,
+            focus_score=0.5,
+            dominant_activity="idle",
+            activity_distribution={},
+            session_elapsed_min=0.0,
+            method="rules",
+            confidence=0.5,
+        )
 
-    state = req.state
-    if state is None and req.task_id is not None:
-        from sigil_ml.features import extract_suggest_features
-        state = extract_suggest_features(config.db_path(), req.task_id)
+    # Use provided classified events or get from poller buffer.
+    classified_events = req.classified_events or []
+    session_info = {"session_elapsed_min": 0.0, "task_phase": None, "test_failures": 0}
 
-    result = _suggest.predict(state)
-    return SuggestResponse(**result)
+    if not classified_events and _poller:
+        classified_events = _poller._buffer
+
+    result = _workflow.predict(classified_events, session_info)
+    return WorkflowStateResponse(**result)
 
 
 @app.post("/predict/duration", response_model=DurationResponse)
@@ -290,7 +321,7 @@ async def predict_quality(req: QualityRequest) -> QualityResponse:
 
 def _run_training(db_path: str) -> None:
     """Run training in a background thread."""
-    global _training_in_progress, _stuck, _suggest, _duration
+    global _training_in_progress
     try:
         _training_in_progress = True
         from sigil_ml.training.trainer import Trainer

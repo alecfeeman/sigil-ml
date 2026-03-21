@@ -181,68 +181,6 @@ def extract_stuck_features(db_path: str | Path, task_id: str) -> dict[str, float
     }
 
 
-def extract_suggest_features(db_path: str | Path, task_id: str) -> dict[str, float]:
-    """Extract features for the suggestion policy.
-
-    Returns:
-        Dict with keys: phase_* (6 one-hot floats), time_in_phase_sec,
-        test_failures, files_touched, hour_of_day_sin, hour_of_day_cos,
-        session_length_sec
-    """
-    task = _query_task(db_path, task_id)
-    phases = ["planning", "coding", "testing", "debugging", "reviewing", "other"]
-
-    if task is None:
-        features: dict[str, float] = {f"phase_{p}": 0.0 for p in phases}
-        features.update({
-            "time_in_phase_sec": 0.0,
-            "test_failures": 0.0,
-            "files_touched": 0.0,
-            "hour_of_day_sin": 0.0,
-            "hour_of_day_cos": 0.0,
-            "session_length_sec": 0.0,
-        })
-        return features
-
-    now_ms = int(time.time() * 1000)
-    started_at = task.get("started_at", now_ms)
-    last_active = task.get("last_active", now_ms)
-
-    # Phase one-hot
-    current_phase = (task.get("phase") or "other").lower()
-    features = {}
-    for p in phases:
-        features[f"phase_{p}"] = 1.0 if current_phase == p else 0.0
-
-    # Time in phase
-    events = _query_events_for_task(db_path, task_id)
-    phase_start = started_at
-    for ev in events:
-        if ev.get("kind") == "phase_change":
-            phase_start = ev.get("ts", phase_start)
-    features["time_in_phase_sec"] = (now_ms - phase_start) / 1000.0
-
-    features["test_failures"] = float(task.get("test_fails", 0) or 0)
-
-    # Files touched
-    files_map = task.get("files")
-    if isinstance(files_map, str):
-        try:
-            files_map = json.loads(files_map)
-        except (json.JSONDecodeError, TypeError):
-            files_map = {}
-    features["files_touched"] = float(len(files_map)) if isinstance(files_map, dict) else 0.0
-
-    # Hour of day (cyclical encoding)
-    hour = time.localtime().tm_hour + time.localtime().tm_min / 60.0
-    features["hour_of_day_sin"] = math.sin(2 * math.pi * hour / 24.0)
-    features["hour_of_day_cos"] = math.cos(2 * math.pi * hour / 24.0)
-
-    features["session_length_sec"] = max((last_active - started_at) / 1000.0, 0.0)
-
-    return features
-
-
 def extract_duration_features(db_path: str | Path, task_id: str) -> dict[str, float]:
     """Extract features for the duration estimator.
 
