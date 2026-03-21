@@ -40,7 +40,7 @@ Issues = "https://github.com/sigil-tech/sigil-ml/issues"
 "Sigil Daemon" = "https://github.com/sigil-tech/sigil"
 
 [project.scripts]
-sigil-ml = "sigil_ml.server:main"
+sigil-ml = "sigil_ml.cli:main"
 
 [tool.ruff]
 target-version = "py310"

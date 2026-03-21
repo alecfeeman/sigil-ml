@@ -7,14 +7,12 @@ from pathlib import Path
 
 import numpy as np
 
-from sigil_ml.features import (
-    extract_duration_features,
-    extract_stuck_features,
-)
+from sigil_ml.features import extract_duration_features, extract_stuck_features
 from sigil_ml.models.duration import FEATURE_NAMES as DURATION_FEATURES
 from sigil_ml.models.duration import DurationEstimator
 from sigil_ml.models.stuck import FEATURE_NAMES as STUCK_FEATURES
 from sigil_ml.models.stuck import StuckPredictor
+from sigil_ml.training.synthetic import generate_duration_data, generate_stuck_data
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +69,6 @@ class Trainer:
 
         if len(rows) < 10:
             logger.info("Not enough completed tasks for stuck training (%d)", len(rows))
-            # Fall back to synthetic data
-            from sigil_ml.training.synthetic import generate_stuck_data
-
             X, y = generate_stuck_data(500)
             predictor = StuckPredictor()
             predictor.train(X, y)
@@ -118,8 +113,6 @@ class Trainer:
 
         if len(rows) < 10:
             logger.info("Not enough completed tasks for duration training (%d)", len(rows))
-            from sigil_ml.training.synthetic import generate_duration_data
-
             X, y = generate_duration_data(500)
             estimator = DurationEstimator()
             estimator.train(X, y)

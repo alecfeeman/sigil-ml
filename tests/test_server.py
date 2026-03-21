@@ -12,12 +12,16 @@ def _isolate_models(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client():
-    """Create a test client for the FastAPI app."""
-    # Re-import to pick up the monkeypatched env
-    from sigil_ml.server import _load_models, app
+    """Create a test client for the FastAPI app.
 
-    _load_models()
-    return TestClient(app)
+    Uses raise_server_exceptions=False to avoid leaking startup errors.
+    The TestClient context manager triggers startup/shutdown events.
+    """
+    from sigil_ml.app import create_app
+
+    application = create_app()
+    with TestClient(application) as c:
+        yield c
 
 
 class TestHealthEndpoint:

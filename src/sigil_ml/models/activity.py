@@ -6,8 +6,10 @@ import logging
 
 import joblib
 import numpy as np
+from sklearn.linear_model import SGDClassifier
 
 from sigil_ml import config
+from sigil_ml.features import extract_activity_features
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +184,6 @@ class ActivityClassifier:
 
     def _classify_ml(self, event: dict) -> dict:
         """ML-based classification using trained SGDClassifier."""
-        from sigil_ml.features import extract_activity_features
-
         features = extract_activity_features(event)
         feature_names = sorted(features.keys())
         x = np.array([[features[f] for f in feature_names]])
@@ -207,8 +207,6 @@ class ActivityClassifier:
             X: Feature matrix of shape (n_samples, n_features).
             y: Category labels (strings from CATEGORIES or CATEGORIES_FULL).
         """
-        from sklearn.linear_model import SGDClassifier
-
         if self._ml_model is None:
             self._ml_model = SGDClassifier(loss="log_loss", random_state=42)
 

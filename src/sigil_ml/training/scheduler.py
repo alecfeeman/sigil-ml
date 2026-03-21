@@ -5,6 +5,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+from sigil_ml.training.trainer import Trainer
+
 logger = logging.getLogger(__name__)
 
 MIN_NEW_TASKS = 10  # retrain after 10 new completed tasks
@@ -40,8 +42,6 @@ class TrainingScheduler:
             "scheduler: triggering retrain (%d new tasks)",
             current - self._baseline_tasks,
         )
-        from sigil_ml.training.trainer import Trainer
-
         try:
             result = Trainer(self.db_path).train_all()
             self._last_retrain = time.time()
