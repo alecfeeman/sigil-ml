@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import math
 
@@ -9,8 +10,8 @@ import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
 
-from sigil_ml import config
 from sigil_ml.features import extract_workflow_features
+from sigil_ml.storage.model_store import LocalModelStore, ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +39,17 @@ class WorkflowStatePredictor:
         winding_down  — decreasing velocity, more integration
     """
 
-    def __init__(self) -> None:
-        self._ml_model = None
+    def __init__(self, model_store: ModelStore | None = None) -> None:
+        self._store = model_store or LocalModelStore()
+        self._ml_model: GradientBoostingClassifier | None = None
         self._trained = False
 
-        weights = config.weights_path("workflow")
-        if weights.exists():
+        data = self._store.load("workflow")
+        if data is not None:
             try:
-                self._ml_model = joblib.load(weights)
+                self._ml_model = joblib.load(io.BytesIO(data))
                 self._trained = True
-                logger.info("Loaded workflow model from %s", weights)
+                logger.info("Loaded workflow model from %s", type(self._store).__name__)
             except Exception:
                 logger.warning("Failed to load workflow model, using rules")
                 self._ml_model = None
@@ -78,7 +80,7 @@ class WorkflowStatePredictor:
         activity_dist = self._activity_distribution(classified_events)
         momentum = self._compute_momentum(classified_events)
         focus = self._compute_focus(activity_dist)
-        dominant_activity = max(activity_dist, key=activity_dist.get) if activity_dist else "idle"
+        dominant_activity = max(activity_dist, key=lambda k: activity_dist[k]) if activity_dist else "idle"
         session_min = session_info.get("session_elapsed_min", 0.0)
         test_failures = session_info.get("test_failures", 0)
 
@@ -128,7 +130,7 @@ class WorkflowStatePredictor:
         if total > 0:
             probs = {s: round(v / total, 4) for s, v in probs.items()}
 
-        dominant_state = max(probs, key=probs.get)
+        dominant_state = max(probs, key=lambda k: probs[k])
 
         return {
             "flow_state": probs,
@@ -166,7 +168,7 @@ class WorkflowStatePredictor:
         activity_dist = self._activity_distribution(classified_events)
         momentum = self._compute_momentum(classified_events)
         focus = self._compute_focus(activity_dist)
-        dominant_activity = max(activity_dist, key=activity_dist.get) if activity_dist else "idle"
+        dominant_activity = max(activity_dist, key=lambda k: activity_dist[k]) if activity_dist else "idle"
 
         return {
             "flow_state": flow_state,
@@ -247,11 +249,8 @@ class WorkflowStatePredictor:
         )
         self._ml_model.fit(X, y)
         self._trained = True
-        self._save()
 
-    def _save(self) -> None:
-        """Persist model weights to disk."""
-        if self._ml_model is not None:
-            weights = config.weights_path("workflow")
-            joblib.dump(self._ml_model, weights)
-            logger.info("Saved workflow model to %s", weights)
+        buf = io.BytesIO()
+        joblib.dump(self._ml_model, buf)
+        self._store.save("workflow", buf.getvalue())
+        logger.info("Saved workflow model via %s", type(self._store).__name__)

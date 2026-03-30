@@ -5,6 +5,7 @@ import sys
 
 import uvicorn
 
+from sigil_ml.storage.model_store import model_store_factory
 from sigil_ml.store import create_store
 from sigil_ml.store_sqlite import SqliteStore
 from sigil_ml.training.trainer import Trainer
@@ -40,8 +41,9 @@ def main() -> None:
             store = SqliteStore(Path(args.db))
         else:
             store = create_store()
-        print(f"Training models using {type(store).__name__} ...")
-        trainer = Trainer(store)
+        ms = model_store_factory()
+        print(f"Training models using {type(store).__name__} + {type(ms).__name__} ...")
+        trainer = Trainer(store, model_store=ms)
         result = trainer.train_all()
         print(f"Done: {result}")
     elif args.command == "health-check":

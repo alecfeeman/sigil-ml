@@ -61,3 +61,28 @@ def tenant_id() -> str:
     Defaults to 'public' if not set.
     """
     return os.environ.get("SIGIL_TENANT", "public")
+
+
+def serving_mode() -> str:
+    """Return the serving mode: 'local' or 'cloud'. Alias for operating_mode()."""
+    return operating_mode()
+
+
+def s3_bucket() -> str | None:
+    """Return the S3 bucket for model storage, or None if not configured."""
+    return os.environ.get("SIGIL_S3_BUCKET")
+
+
+def s3_endpoint_url() -> str | None:
+    """Return the S3 endpoint URL (for MinIO), or None for AWS default."""
+    return os.environ.get("SIGIL_S3_ENDPOINT_URL")
+
+
+def aws_region() -> str | None:
+    """Return the AWS region, or None for default."""
+    return os.environ.get("AWS_REGION")
+
+
+def model_cache_ttl() -> float:
+    """Return the model cache TTL in seconds. Default 300."""
+    return float(os.environ.get("SIGIL_MODEL_CACHE_TTL", "300"))

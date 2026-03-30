@@ -216,7 +216,7 @@ def _run_training(state: AppState) -> None:
     """Run training in a background thread."""
     try:
         state.training_in_progress = True
-        trainer = Trainer(state.store)
+        trainer = Trainer(state.store, model_store=state.model_store)
         result = trainer.train_all()
         logger.info("Training complete: %s", result)
         state.load_models()

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import io
 import logging
 
 import joblib
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 
-from sigil_ml import config
 from sigil_ml.features import extract_activity_features
+from sigil_ml.storage.model_store import LocalModelStore, ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -88,16 +89,17 @@ class ActivityClassifier:
         idle        - gaps between events
     """
 
-    def __init__(self) -> None:
-        self._ml_model = None
+    def __init__(self, model_store: ModelStore | None = None) -> None:
+        self._store = model_store or LocalModelStore()
+        self._ml_model: SGDClassifier | None = None
         self._trained = False
 
-        weights = config.weights_path("activity")
-        if weights.exists():
+        data = self._store.load("activity")
+        if data is not None:
             try:
-                self._ml_model = joblib.load(weights)
+                self._ml_model = joblib.load(io.BytesIO(data))
                 self._trained = True
-                logger.info("Loaded activity classifier from %s", weights)
+                logger.info("Loaded activity classifier from %s", type(self._store).__name__)
             except Exception:
                 logger.warning("Failed to load activity classifier, using rules")
                 self._ml_model = None
@@ -213,11 +215,8 @@ class ActivityClassifier:
         classes = np.array(CATEGORIES_FULL)
         self._ml_model.partial_fit(X, y, classes=classes)
         self._trained = True
-        self._save()
 
-    def _save(self) -> None:
-        """Persist the ML model to disk."""
-        if self._ml_model is not None:
-            weights = config.weights_path("activity")
-            joblib.dump(self._ml_model, weights)
-            logger.info("Saved activity classifier to %s", weights)
+        buf = io.BytesIO()
+        joblib.dump(self._ml_model, buf)
+        self._store.save("activity", buf.getvalue())
+        logger.info("Saved activity classifier via %s", type(self._store).__name__)
