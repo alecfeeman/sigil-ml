@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 
@@ -166,7 +167,6 @@ class Trainer:
             try:
                 evidence = fb.get("evidence") or {}
                 if isinstance(evidence, str):
-                    import json
                     evidence = json.loads(evidence)
                 features = self._extract_pattern_features(evidence)
                 if features is not None:
@@ -182,7 +182,7 @@ class Trainer:
 
         from sigil_ml.signals.pattern_detector import PatternDetector
         detector = PatternDetector()
-        detector.train(X, np.zeros(len(X)))  # IsolationForest is unsupervised
+        detector.train(X)  # IsolationForest is unsupervised
         detector.save(self._model_store)
 
         return len(X)
@@ -225,14 +225,16 @@ class Trainer:
         predictor.reset()  # Start fresh for full rebuild
         total_tokens = 0
 
+        # Create classifier once before the loop
+        from sigil_ml.models.activity import ActivityClassifier
+        classifier = ActivityClassifier(model_store=self._model_store)
+
         for task_id in task_ids:
             events = self.store.get_events_for_task(task_id)
             if not events:
                 continue
 
             # Classify events (needed for composite tokens)
-            from sigil_ml.models.activity import ActivityClassifier
-            classifier = ActivityClassifier(model_store=self._model_store)
             for e in events:
                 if "_category" not in e:
                     result = classifier.classify(e)

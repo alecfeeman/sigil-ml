@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
+
+if TYPE_CHECKING:
+    from sigil_ml.signals.engine import SignalEngine
 
 from fastapi import FastAPI
 
@@ -37,7 +40,7 @@ class AppState:
         self.duration: DurationEstimator | None = None
         self.quality: QualityEstimator | None = None
         self.poller: EventPoller | None = None
-        self.signal_engine: Any = None
+        self.signal_engine: SignalEngine | None = None
         self.training_in_progress: bool = False
         # Cloud-mode fields (initialized by cloud startup path)
         self.model_cache: Any = None

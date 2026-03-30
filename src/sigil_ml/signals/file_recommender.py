@@ -14,6 +14,7 @@ from typing import Any
 
 from sigil_ml.signals import Signal
 from sigil_ml.signals.profile import BehaviorProfile
+from sigil_ml.storage.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,8 @@ class FileRecommender:
     """
 
     def __init__(self) -> None:
-        self._cooccurrence: dict[str, Counter] = defaultdict(Counter)
-        self._file_counts: Counter = Counter()
+        self._cooccurrence: dict[str, Counter[str]] = defaultdict(Counter)
+        self._file_counts: Counter[str] = Counter()
         self._task_count: int = 0
 
     def check(
@@ -196,7 +197,7 @@ class FileRecommender:
         repo_root: str | None,
     ) -> Signal:
         """Build a file recommendation signal."""
-        # Use the most recently edited file as the trigger
+        # Use the alphabetically last file as the trigger
         trigger_file = sorted(current_files)[-1] if current_files else "unknown"
 
         return Signal(
@@ -219,7 +220,7 @@ class FileRecommender:
 
     # --- Model persistence ---
 
-    def save(self, model_store: Any) -> None:
+    def save(self, model_store: ModelStore) -> None:
         """Persist co-occurrence matrix via ModelStore."""
         import io
         import joblib
@@ -236,7 +237,7 @@ class FileRecommender:
             len(self._file_counts), self._task_count,
         )
 
-    def load(self, model_store: Any) -> bool:
+    def load(self, model_store: ModelStore) -> bool:
         """Load co-occurrence matrix from ModelStore. Returns True if loaded."""
         raw = model_store.load("file_recommender")
         if raw is None:

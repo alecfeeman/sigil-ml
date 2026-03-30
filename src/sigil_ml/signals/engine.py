@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 
+from sigil_ml.features import extract_action_token
 from sigil_ml.signals import Signal
 from sigil_ml.signals.file_recommender import FileRecommender
 from sigil_ml.signals.next_action import NextActionPredictor
@@ -50,6 +50,9 @@ class SignalEngine:
         # Rate limiting state
         self._recent_signals: list[tuple[str, float]] = []  # (signal_type, timestamp)
         self._dismissed_types: dict[str, float] = {}  # signal_type -> dismissed_at
+        # Double-counting prevention: track last-seen event ID
+        self._last_profile_event_id: int = 0
+        self._last_ngram_event_id: int = 0
 
     def process_events(
         self,
@@ -81,13 +84,22 @@ class SignalEngine:
         self, buffer: list[dict], task_context: dict | None
     ) -> int:
         """Inner processing loop -- separated for error isolation."""
-        # 1. Update behavior profile
-        self.profile.update(buffer[-20:])  # Only new events since last cycle
+        # 1. Update behavior profile (only unseen events)
+        new_profile_events = [
+            e for e in buffer if e.get("id", 0) > self._last_profile_event_id
+        ]
+        if new_profile_events:
+            self.profile.update(new_profile_events)
+            self._last_profile_event_id = new_profile_events[-1].get("id", 0)
 
-        # 2. Update n-gram model incrementally
-        self.next_action.train_incremental(
-            self.next_action._extract_tokens(buffer[-20:])
-        )
+        # 2. Update n-gram model incrementally (only unseen events)
+        new_ngram_events = [
+            e for e in buffer if e.get("id", 0) > self._last_ngram_event_id
+        ]
+        if new_ngram_events:
+            tokens = [extract_action_token(e) for e in new_ngram_events]
+            self.next_action.train_incremental(tokens)
+            self._last_ngram_event_id = new_ngram_events[-1].get("id", 0)
 
         # 3. Collect signals from all models
         signals: list[Signal] = []

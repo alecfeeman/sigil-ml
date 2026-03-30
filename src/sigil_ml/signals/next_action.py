@@ -12,6 +12,7 @@ from typing import Any
 
 from sigil_ml.signals import Signal
 from sigil_ml.signals.profile import BehaviorProfile
+from sigil_ml.storage.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class NextActionPredictor:
 
     def __init__(self, n: int = 3) -> None:
         self._n = n
-        self._ngrams: dict[tuple, Counter] = defaultdict(Counter)
+        self._ngrams: dict[tuple[str, ...], Counter[str]] = defaultdict(Counter)
         self._total_tokens: int = 0
 
     def check_divergence(
@@ -187,7 +188,7 @@ class NextActionPredictor:
 
     # --- Model persistence ---
 
-    def save(self, model_store: Any) -> None:
+    def save(self, model_store: ModelStore) -> None:
         """Persist n-gram tables via ModelStore."""
         import io
         import joblib
@@ -204,7 +205,7 @@ class NextActionPredictor:
             len(self._ngrams),
         )
 
-    def load(self, model_store: Any) -> bool:
+    def load(self, model_store: ModelStore) -> bool:
         """Load n-gram tables from ModelStore. Returns True if loaded."""
         raw = model_store.load("next_action")
         if raw is None:

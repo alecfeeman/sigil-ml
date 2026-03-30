@@ -11,6 +11,7 @@ from typing import Any
 
 from sigil_ml.signals import Signal
 from sigil_ml.signals.profile import BehaviorProfile, RollingStat
+from sigil_ml.storage.model_store import ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -164,15 +165,13 @@ class PatternDetector:
 
     # --- IsolationForest ML upgrade path (stub) ---
 
-    def train(self, feature_matrix: Any, labels: Any) -> None:
+    def train(self, feature_matrix: Any) -> None:
         """Train IsolationForest from feedback-labeled behavioral vectors.
 
         Called by Trainer (WP07) after 500+ labeled feedback events.
 
         Args:
             feature_matrix: numpy array of behavioral feature vectors.
-            labels: numpy array where 1 = normal (accepted signal),
-                    0 = anomalous (dismissed signal).
         """
         from sklearn.ensemble import IsolationForest
         self._isolation_forest = IsolationForest(
@@ -187,7 +186,7 @@ class PatternDetector:
             len(feature_matrix),
         )
 
-    def save(self, model_store: Any) -> None:
+    def save(self, model_store: ModelStore) -> None:
         """Persist trained IsolationForest via ModelStore."""
         if self._isolation_forest is None:
             return
@@ -197,7 +196,7 @@ class PatternDetector:
         joblib.dump(self._isolation_forest, buf)
         model_store.save("pattern_detector", buf.getvalue())
 
-    def load(self, model_store: Any) -> bool:
+    def load(self, model_store: ModelStore) -> bool:
         """Load trained IsolationForest from ModelStore. Returns True if loaded."""
         data = model_store.load("pattern_detector")
         if data is None:

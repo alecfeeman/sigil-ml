@@ -29,7 +29,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):  # noqa: N807
+def __getattr__(name: str) -> type:  # noqa: N807
     """Lazy imports for signal model classes to avoid circular imports."""
     if name == "PatternDetector":
         from sigil_ml.signals.pattern_detector import PatternDetector

@@ -10,7 +10,10 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sigil_ml.signals.engine import SignalEngine
 
 from sigil_ml.features import (
     extract_duration_features,
@@ -33,7 +36,7 @@ class EventPoller:
     """Polls sigild's events table and writes predictions to ml_predictions."""
 
     def __init__(self, store: DataStore, models: dict[str, Any],
-                 signal_engine: Any | None = None) -> None:
+                 signal_engine: SignalEngine | None = None) -> None:
         self.store = store
         self.stuck = models["stuck"]
         self.activity = models["activity"]
