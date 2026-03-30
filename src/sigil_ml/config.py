@@ -1,5 +1,7 @@
 """Configuration and path discovery for sigil-ml."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 

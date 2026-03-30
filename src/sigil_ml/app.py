@@ -1,5 +1,7 @@
 """FastAPI application factory and model lifecycle."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 

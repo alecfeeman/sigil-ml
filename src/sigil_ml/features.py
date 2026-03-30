@@ -8,8 +8,6 @@ from __future__ import annotations
 import json
 import math
 import time
-from typing import Any
-
 from sigil_ml.store import DataStore
 
 # --- Activity classification features ---
@@ -68,22 +66,6 @@ def extract_activity_features(event: dict) -> dict[str, float]:
     features["ext_docs"] = 1.0 if ext in ("md", "txt", "rst", "adoc") else 0.0
 
     return features
-
-
-def _query_task(store: DataStore, task_id: str) -> dict[str, Any] | None:
-    """Read a single task row from the tasks table via DataStore."""
-    return store.get_task_by_id(task_id)
-
-
-def _query_events_for_task(store: DataStore, task_id: str, since: int | None = None) -> list[dict[str, Any]]:
-    """Read events that fall within a task's time window via DataStore.
-
-    Args:
-        store: DataStore instance.
-        task_id: The task ID to look up.
-        since: Optional unix-millis lower bound; defaults to the task's started_at.
-    """
-    return store.get_events_for_task(task_id, since=since)
 
 
 def extract_stuck_features(store: DataStore, task_id: str) -> dict[str, float]:

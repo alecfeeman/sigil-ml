@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 
 from sigil_ml.features import (
-    _query_events_for_task,
-    _query_task,
     extract_duration_features,
     extract_stuck_features,
 )
@@ -113,16 +111,16 @@ def store(test_db: Path) -> SqliteStore:
 
 class TestQueryHelpers:
     def test_query_task_exists(self, store: SqliteStore) -> None:
-        task = _query_task(store, "task-1")
+        task = store.get_task_by_id("task-1")
         assert task is not None
         assert task["branch"] == "feature/add-widget"
         assert task["phase"] == "coding"
 
     def test_query_task_not_found(self, store: SqliteStore) -> None:
-        assert _query_task(store, "nonexistent") is None
+        assert store.get_task_by_id("nonexistent") is None
 
     def test_query_events(self, store: SqliteStore) -> None:
-        events = _query_events_for_task(store, "task-1")
+        events = store.get_events_for_task("task-1")
         assert len(events) > 0
         kinds = [e["kind"] for e in events]
         assert "edit" in kinds

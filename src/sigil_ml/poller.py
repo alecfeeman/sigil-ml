@@ -4,6 +4,8 @@ Polls events -> classifies activity -> runs models -> writes to ml_predictions.
 Runs as an asyncio background task inside the FastAPI process.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -175,7 +177,7 @@ class EventPoller:
             for e in self._buffer[-10:]
         ]
 
-        dominant = max(window_summary, key=window_summary.get) if window_summary else "idle"
+        dominant = max(window_summary, key=lambda k: window_summary[k]) if window_summary else "idle"
 
         # Average confidence of classifications.
         confidences = [e.get("_category_confidence", 0.5) for e in self._buffer]
