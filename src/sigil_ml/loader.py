@@ -62,8 +62,6 @@ class FilesystemModelLoader:
         Tries tenant-specific path first, then shared path.
         Returns None if neither exists or if loading fails.
         """
-        import joblib
-
         # Tenant-specific path
         tenant_path = self._base_dir / tenant_id / f"{model_name}.joblib"
         if tenant_path.exists():
