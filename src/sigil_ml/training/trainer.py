@@ -1,5 +1,7 @@
 """Trainer: reads from the DataStore and retrains all models."""
 
+from __future__ import annotations
+
 import logging
 import time
 
@@ -10,6 +12,7 @@ from sigil_ml.models.duration import FEATURE_NAMES as DURATION_FEATURES
 from sigil_ml.models.duration import DurationEstimator
 from sigil_ml.models.stuck import FEATURE_NAMES as STUCK_FEATURES
 from sigil_ml.models.stuck import StuckPredictor
+from sigil_ml.storage.model_store import ModelStore
 from sigil_ml.store import DataStore
 from sigil_ml.training.synthetic import generate_duration_data, generate_stuck_data
 
@@ -19,8 +22,9 @@ logger = logging.getLogger(__name__)
 class Trainer:
     """Orchestrates training of all sigil-ml models from local data."""
 
-    def __init__(self, store: DataStore) -> None:
+    def __init__(self, store: DataStore, model_store: ModelStore | None = None) -> None:
         self.store = store
+        self._model_store = model_store
 
     def train_all(self) -> dict:
         """Train all models and return a summary.
@@ -60,7 +64,7 @@ class Trainer:
         if len(task_ids) < 10:
             logger.info("Not enough completed tasks for stuck training (%d)", len(task_ids))
             X, y = generate_stuck_data(500)
-            predictor = StuckPredictor()
+            predictor = StuckPredictor(model_store=self._model_store)
             predictor.train(X, y)
             return 500
 
@@ -77,7 +81,7 @@ class Trainer:
         X = np.array(X_list)
         y = np.array(y_list)
 
-        predictor = StuckPredictor()
+        predictor = StuckPredictor(model_store=self._model_store)
         predictor.train(X, y)
         return len(X)
 
@@ -92,7 +96,7 @@ class Trainer:
         if len(rows) < 10:
             logger.info("Not enough completed tasks for duration training (%d)", len(rows))
             X, y = generate_duration_data(500)
-            estimator = DurationEstimator()
+            estimator = DurationEstimator(model_store=self._model_store)
             estimator.train(X, y)
             return 500
 
@@ -110,6 +114,6 @@ class Trainer:
         X = np.array(X_list)
         y = np.array(y_list)
 
-        estimator = DurationEstimator()
+        estimator = DurationEstimator(model_store=self._model_store)
         estimator.train(X, y)
         return len(X)

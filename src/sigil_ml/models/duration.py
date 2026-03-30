@@ -1,12 +1,15 @@
 """Duration estimator using GradientBoostingRegressor."""
 
+from __future__ import annotations
+
+import io
 import logging
 
 import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor
 
-from sigil_ml import config
+from sigil_ml.storage.model_store import LocalModelStore, ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +24,16 @@ FEATURE_NAMES = [
 class DurationEstimator:
     """Estimates task duration in minutes."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_store: ModelStore | None = None) -> None:
+        self._store = model_store or LocalModelStore()
         self.model: GradientBoostingRegressor | None = None
         self._trained = False
-        weights = config.weights_path("duration")
-        if weights.exists():
+        data = self._store.load("duration")
+        if data is not None:
             try:
-                self.model = joblib.load(weights)
+                self.model = joblib.load(io.BytesIO(data))
                 self._trained = True
-                logger.info("Loaded duration model from %s", weights)
+                logger.info("Loaded duration model from %s", type(self._store).__name__)
             except Exception:
                 logger.warning("Failed to load duration model, starting fresh")
                 self.model = None
@@ -90,6 +94,7 @@ class DurationEstimator:
         self.model.fit(X, y)
         self._trained = True
 
-        weights = config.weights_path("duration")
-        joblib.dump(self.model, weights)
-        logger.info("Saved duration model to %s", weights)
+        buf = io.BytesIO()
+        joblib.dump(self.model, buf)
+        self._store.save("duration", buf.getvalue())
+        logger.info("Saved duration model via %s", type(self._store).__name__)

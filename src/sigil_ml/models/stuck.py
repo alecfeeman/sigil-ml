@@ -1,12 +1,15 @@
 """Stuck predictor using GradientBoostingClassifier."""
 
+from __future__ import annotations
+
+import io
 import logging
 
 import joblib
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
 
-from sigil_ml import config
+from sigil_ml.storage.model_store import LocalModelStore, ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +26,16 @@ FEATURE_NAMES = [
 class StuckPredictor:
     """Predicts whether a developer is stuck on a task."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_store: ModelStore | None = None) -> None:
+        self._store = model_store or LocalModelStore()
         self.model: GradientBoostingClassifier | None = None
         self._trained = False
-        weights = config.weights_path("stuck")
-        if weights.exists():
+        data = self._store.load("stuck")
+        if data is not None:
             try:
-                self.model = joblib.load(weights)
+                self.model = joblib.load(io.BytesIO(data))
                 self._trained = True
-                logger.info("Loaded stuck model from %s", weights)
+                logger.info("Loaded stuck model from %s", type(self._store).__name__)
             except Exception:
                 logger.warning("Failed to load stuck model weights, starting fresh")
                 self.model = None
@@ -77,6 +81,7 @@ class StuckPredictor:
         self.model.fit(X, y)
         self._trained = True
 
-        weights = config.weights_path("stuck")
-        joblib.dump(self.model, weights)
-        logger.info("Saved stuck model to %s", weights)
+        buf = io.BytesIO()
+        joblib.dump(self.model, buf)
+        self._store.save("stuck", buf.getvalue())
+        logger.info("Saved stuck model via %s", type(self._store).__name__)

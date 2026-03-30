@@ -5,13 +5,14 @@ rule-based initially but the component weights can be learned from
 task outcome data. The LLM interprets scores and generates suggestions.
 """
 
+from __future__ import annotations
+
 import json
 import logging
-from pathlib import Path
 
 import numpy as np
 
-from sigil_ml import config
+from sigil_ml.storage.model_store import LocalModelStore, ModelStore
 
 logger = logging.getLogger(__name__)
 
@@ -38,26 +39,24 @@ class QualityEstimator:
     were strong during those tasks).
     """
 
-    def __init__(self):
+    def __init__(self, model_store: ModelStore | None = None) -> None:
+        self._store = model_store or LocalModelStore()
         self.weights = dict(DEFAULT_WEIGHTS)
         self._load_weights()
 
-    def _load_weights(self):
-        path = Path(config.weights_path("quality"))
-        if path.exists():
+    def _load_weights(self) -> None:
+        data = self._store.load("quality")
+        if data is not None:
             try:
-                with open(path) as f:
-                    saved = json.load(f)
+                saved = json.loads(data.decode("utf-8"))
                 self.weights = saved.get("weights", self.weights)
-                logger.info("quality: loaded learned weights")
+                logger.info("quality: loaded learned weights from %s", type(self._store).__name__)
             except Exception as e:
-                logger.warning(f"quality: failed to load weights: {e}")
+                logger.warning("quality: failed to load weights: %s", e)
 
-    def _save_weights(self):
-        path = Path(config.weights_path("quality"))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump({"weights": self.weights}, f)
+    def _save_weights(self) -> None:
+        data = json.dumps({"weights": self.weights}).encode("utf-8")
+        self._store.save("quality", data)
 
     def predict(self, features: dict) -> dict:
         """Compute quality score from rolling window features.
@@ -137,7 +136,7 @@ class QualityEstimator:
             "threshold_high": THRESHOLD_HIGH,
         }
 
-    def train(self, task_outcomes: list[dict]):
+    def train(self, task_outcomes: list[dict]) -> None:
         """Learn component weights from task outcome data.
 
         Each outcome dict should have:
@@ -163,7 +162,6 @@ class QualityEstimator:
             y[i] = outcome.get("speed_score", 0.0)
 
         # Simple: weight each component by its correlation with speed score.
-        # Positive correlation = higher weight.
         correlations = np.zeros(len(names))
         for j in range(len(names)):
             col = X[:, j]

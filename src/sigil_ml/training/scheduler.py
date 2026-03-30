@@ -1,8 +1,11 @@
 """Training scheduler — fires retraining when enough new data has accumulated."""
 
+from __future__ import annotations
+
 import logging
 import time
 
+from sigil_ml.storage.model_store import ModelStore
 from sigil_ml.store import DataStore
 from sigil_ml.training.trainer import Trainer
 
@@ -21,8 +24,9 @@ class TrainingScheduler:
                          model instances into the running poller.
     """
 
-    def __init__(self, store: DataStore, reload_callback) -> None:
+    def __init__(self, store: DataStore, model_store: ModelStore | None = None, reload_callback=None) -> None:
         self.store = store
+        self._model_store = model_store
         self._reload = reload_callback
         self._last_retrain: float = 0.0
         self._baseline_tasks: int = self._count_completed()
@@ -42,7 +46,7 @@ class TrainingScheduler:
             current - self._baseline_tasks,
         )
         try:
-            result = Trainer(self.store).train_all()
+            result = Trainer(self.store, model_store=self._model_store).train_all()
             self._last_retrain = time.time()
             self._baseline_tasks = current
             self._log_retrain(result)

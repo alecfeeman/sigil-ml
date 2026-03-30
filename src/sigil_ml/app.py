@@ -14,6 +14,7 @@ from sigil_ml.models.stuck import StuckPredictor
 from sigil_ml.models.workflow import WorkflowStatePredictor
 from sigil_ml.poller import EventPoller
 from sigil_ml.routes import register_routes
+from sigil_ml.storage.model_store import ModelStore, model_store_factory
 from sigil_ml.store import DataStore, create_store
 from sigil_ml.training.scheduler import TrainingScheduler
 
@@ -25,6 +26,7 @@ class AppState:
 
     def __init__(self) -> None:
         self.store: DataStore | None = None
+        self.model_store: ModelStore | None = None
         self.stuck: StuckPredictor | None = None
         self.activity: ActivityClassifier | None = None
         self.workflow: WorkflowStatePredictor | None = None
@@ -33,13 +35,14 @@ class AppState:
         self.poller: EventPoller | None = None
         self.training_in_progress: bool = False
 
-    def load_models(self) -> None:
-        """Load or reload all model instances from disk."""
-        self.stuck = StuckPredictor()
-        self.activity = ActivityClassifier()
-        self.workflow = WorkflowStatePredictor()
-        self.duration = DurationEstimator()
-        self.quality = QualityEstimator()
+    def load_models(self, model_store: ModelStore | None = None) -> None:
+        """Load or reload all model instances."""
+        ms = model_store or self.model_store
+        self.stuck = StuckPredictor(model_store=ms)
+        self.activity = ActivityClassifier(model_store=ms)
+        self.workflow = WorkflowStatePredictor(model_store=ms)
+        self.duration = DurationEstimator(model_store=ms)
+        self.quality = QualityEstimator(model_store=ms)
 
     def reload_models_into_poller(self) -> None:
         """Reload model instances after retraining."""
@@ -65,14 +68,17 @@ def create_app() -> FastAPI:
         store = create_store()
         state.store = store
 
-        logger.info("sigil-ml: using %s backend", type(store).__name__)
+        ms = model_store_factory()
+        state.model_store = ms
+
+        logger.info("sigil-ml: using %s data backend, %s model backend", type(store).__name__, type(ms).__name__)
 
         try:
             store.ensure_tables()
         except Exception:
             logger.warning("schema bootstrap failed (sigild may not have started yet)", exc_info=True)
 
-        state.load_models()
+        state.load_models(ms)
 
         state.poller = EventPoller(
             store=store,
@@ -86,7 +92,7 @@ def create_app() -> FastAPI:
         )
         asyncio.create_task(state.poller.run())
 
-        scheduler = TrainingScheduler(store, reload_callback=state.reload_models_into_poller)
+        scheduler = TrainingScheduler(store, model_store=ms, reload_callback=state.reload_models_into_poller)
 
         async def _schedule_loop():
             while True:
