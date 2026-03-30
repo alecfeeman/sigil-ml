@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from sigil_ml import config
 from sigil_ml.config import ServingMode
 from sigil_ml.features import extract_duration_features, extract_stuck_features
 from sigil_ml.models.stuck import StuckPredictor
