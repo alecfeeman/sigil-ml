@@ -20,9 +20,26 @@ from sigil_ml.signals.profile import BehaviorProfile, RollingStat
 
 __all__ = [
     "BehaviorProfile",
+    "FileRecommender",
+    "NextActionPredictor",
+    "PatternDetector",
     "RollingStat",
     "Signal",
 ]
+
+
+def __getattr__(name: str):  # noqa: N807
+    """Lazy imports for signal model classes to avoid circular imports."""
+    if name == "PatternDetector":
+        from sigil_ml.signals.pattern_detector import PatternDetector
+        return PatternDetector
+    if name == "NextActionPredictor":
+        from sigil_ml.signals.next_action import NextActionPredictor
+        return NextActionPredictor
+    if name == "FileRecommender":
+        from sigil_ml.signals.file_recommender import FileRecommender
+        return FileRecommender
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass

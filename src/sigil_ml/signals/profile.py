@@ -47,6 +47,16 @@ class RollingStat:
         """Serialize to a JSON-compatible dict."""
         return {"mean": self.mean, "variance": self.variance, "count": self.count}
 
+    def z_score(self, value: float) -> float | None:
+        """Compute z-score of value against this stat's baseline.
+
+        Returns None if insufficient observations (count < 2) or
+        if the standard deviation is near zero (constant values).
+        """
+        if self.count < 2 or self.std < 1e-10:
+            return None
+        return (value - self.mean) / self.std
+
     @classmethod
     def from_dict(cls, d: dict, alpha: float = 0.995) -> RollingStat:
         """Restore from a serialized dict."""
