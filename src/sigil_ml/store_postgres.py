@@ -98,8 +98,27 @@ class PostgresStore:
                 VALUES (1, 0, 0)
                 ON CONFLICT (id) DO NOTHING
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ml_signals (
+                    id               SERIAL PRIMARY KEY,
+                    signal_type      TEXT    NOT NULL,
+                    confidence       REAL    NOT NULL,
+                    evidence         TEXT    NOT NULL,
+                    suggested_action TEXT,
+                    created_at       BIGINT  NOT NULL,
+                    expires_at       BIGINT,
+                    rendered         INTEGER NOT NULL DEFAULT 0,
+                    suggestion_id    INTEGER
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ml_signals_created_at ON ml_signals(created_at)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ml_signals_rendered ON ml_signals(rendered)
+            """)
         conn.commit()
-        logger.info("postgres: ml_cursor table ensured in schema %s", self._tenant)
+        logger.info("postgres: ml_cursor and ml_signals tables ensured in schema %s", self._tenant)
 
     # --- Cursor operations ---
 
@@ -299,6 +318,52 @@ class PostgresStore:
                 "VALUES (%s, %s, %s, %s, %s)",
                 (kind, endpoint, routing, latency_ms, int(time.time() * 1000)),
             )
+
+    # --- Signal operations ---
+
+    def insert_signal(
+        self,
+        signal_type: str,
+        confidence: float,
+        evidence: dict,
+        suggested_action: str | None = None,
+        ttl_sec: int | None = None,
+    ) -> int:
+        """Insert a signal into ml_signals. Returns the signal ID."""
+        conn = self._get_conn()
+        now_ms = int(time.time() * 1000)
+        expires_ms = (now_ms + ttl_sec * 1000) if ttl_sec else None
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ml_signals "
+                "(signal_type, confidence, evidence, suggested_action, created_at, expires_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (signal_type, round(confidence, 4), json.dumps(evidence),
+                 suggested_action, now_ms, expires_ms),
+            )
+            row = cur.fetchone()
+            return row[0]
+
+    def get_signal_feedback(self, since_ms: int) -> list[dict]:
+        """Read feedback linkages from suggestions table for training."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT s.signal_id, ms.signal_type, s.status, s.created_at "
+                    "FROM suggestions s "
+                    "JOIN ml_signals ms ON s.signal_id = ms.id "
+                    "WHERE s.signal_id IS NOT NULL AND s.created_at > %s "
+                    "ORDER BY s.created_at ASC",
+                    (since_ms,),
+                )
+                return [
+                    {"signal_id": r[0], "signal_type": r[1], "status": r[2], "created_at": r[3]}
+                    for r in cur.fetchall()
+                ]
+        except Exception:
+            logger.debug("get_signal_feedback: suggestions.signal_id not available yet")
+            return []
 
     # --- Cloud training methods ---
 

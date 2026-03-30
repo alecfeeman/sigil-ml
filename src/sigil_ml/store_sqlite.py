@@ -56,7 +56,7 @@ class SqliteStore:
     # --- Schema bootstrap ---
 
     def ensure_tables(self) -> None:
-        """Create Python-owned tables if they don't exist (ml_cursor)."""
+        """Create Python-owned tables if they don't exist (ml_cursor, ml_signals)."""
         conn = self._get_conn()
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS ml_cursor (
@@ -66,9 +66,23 @@ class SqliteStore:
             );
             INSERT OR IGNORE INTO ml_cursor (id, last_event_id, updated_at)
             VALUES (1, 0, 0);
+
+            CREATE TABLE IF NOT EXISTS ml_signals (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_type      TEXT    NOT NULL,
+                confidence       REAL    NOT NULL,
+                evidence         TEXT    NOT NULL,
+                suggested_action TEXT,
+                created_at       INTEGER NOT NULL,
+                expires_at       INTEGER,
+                rendered         INTEGER NOT NULL DEFAULT 0,
+                suggestion_id    INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_ml_signals_created_at ON ml_signals(created_at);
+            CREATE INDEX IF NOT EXISTS idx_ml_signals_rendered ON ml_signals(rendered);
         """)
         conn.commit()
-        logger.info("schema: ml_cursor table ensured")
+        logger.info("schema: ml_cursor and ml_signals tables ensured")
 
     # --- Cursor operations ---
 
@@ -252,6 +266,50 @@ class SqliteStore:
             "VALUES (?, ?, ?, ?, ?)",
             (kind, endpoint, routing, latency_ms, int(time.time() * 1000)),
         )
+
+    # --- Signal operations ---
+
+    def insert_signal(
+        self,
+        signal_type: str,
+        confidence: float,
+        evidence: dict,
+        suggested_action: str | None = None,
+        ttl_sec: int | None = None,
+    ) -> int:
+        """Insert a signal into ml_signals. Returns the signal ID."""
+        conn = self._get_conn()
+        now_ms = int(time.time() * 1000)
+        expires_ms = (now_ms + ttl_sec * 1000) if ttl_sec else None
+        cur = conn.execute(
+            "INSERT INTO ml_signals "
+            "(signal_type, confidence, evidence, suggested_action, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (signal_type, round(confidence, 4), json.dumps(evidence),
+             suggested_action, now_ms, expires_ms),
+        )
+        return cur.lastrowid
+
+    def get_signal_feedback(self, since_ms: int) -> list[dict]:
+        """Read feedback linkages from suggestions table for training."""
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT s.signal_id, ms.signal_type, s.status, s.created_at "
+                "FROM suggestions s "
+                "JOIN ml_signals ms ON s.signal_id = ms.id "
+                "WHERE s.signal_id IS NOT NULL AND s.created_at > ? "
+                "ORDER BY s.created_at ASC",
+                (since_ms,),
+            ).fetchall()
+            return [
+                {"signal_id": r[0], "signal_type": r[1], "status": r[2], "created_at": r[3]}
+                for r in rows
+            ]
+        except Exception:
+            # signal_id column may not exist yet (Go Feature 021)
+            logger.debug("get_signal_feedback: suggestions.signal_id not available yet")
+            return []
 
     # --- Cloud training methods (not supported in local SQLite mode) ---
 

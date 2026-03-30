@@ -18,7 +18,7 @@ class DataStore(Protocol):
     """Protocol for all data access operations in sigil-ml.
 
     Implementations: SqliteStore (local), PostgresStore (cloud).
-    Python only writes to ml_predictions, ml_events, ml_cursor.
+    Python only writes to ml_predictions, ml_events, ml_cursor, ml_signals.
     Python only reads from events, tasks, patterns, suggestions.
     """
 
@@ -94,6 +94,42 @@ class DataStore(Protocol):
         self, kind: str, endpoint: str, routing: str, latency_ms: int
     ) -> None:
         """Insert a row into ml_events."""
+        ...
+
+    def insert_signal(
+        self,
+        signal_type: str,
+        confidence: float,
+        evidence: dict,
+        suggested_action: str | None = None,
+        ttl_sec: int | None = None,
+    ) -> int:
+        """Insert a signal into ml_signals. Returns the signal ID.
+
+        Args:
+            signal_type: Model-generated type (e.g., "velocity_deviation").
+            confidence: Model's confidence score (0.0 to 1.0).
+            evidence: Structured JSON evidence for LLM rendering.
+            suggested_action: Optional generic action hint (e.g., "test", "commit").
+            ttl_sec: Optional time-to-live in seconds. None = no expiry.
+
+        Returns:
+            The auto-generated integer ID of the inserted signal.
+        """
+        ...
+
+    def get_signal_feedback(self, since_ms: int) -> list[dict]:
+        """Read feedback linkages from suggestions table for training.
+
+        Returns rows where a suggestion was linked to an ml_signal
+        (via signal_id column) and has a status of accepted/dismissed/ignored.
+
+        Args:
+            since_ms: Only return feedback newer than this Unix ms timestamp.
+
+        Returns:
+            List of dicts with keys: signal_id, signal_type, status, created_at.
+        """
         ...
 
     def commit(self) -> None:
