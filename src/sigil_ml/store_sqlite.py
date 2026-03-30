@@ -109,8 +109,7 @@ class SqliteStore:
         """
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT id, kind, source, payload, ts FROM events "
-            "WHERE id > ? ORDER BY id ASC LIMIT ?",
+            "SELECT id, kind, source, payload, ts FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
             (since_id, limit),
         ).fetchall()
         columns = ["id", "kind", "source", "payload", "ts"]
@@ -151,8 +150,7 @@ class SqliteStore:
         """Return the ID of the active (non-idle, not completed) task, or None."""
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT id FROM tasks WHERE phase != 'idle' "
-            "AND completed_at IS NULL ORDER BY last_active DESC LIMIT 1"
+            "SELECT id FROM tasks WHERE phase != 'idle' AND completed_at IS NULL ORDER BY last_active DESC LIMIT 1"
         ).fetchone()
         return row[0] if row else None
 
@@ -201,8 +199,7 @@ class SqliteStore:
         """Return id, started_at, completed_at for completed tasks with both timestamps set."""
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT id, started_at, completed_at FROM tasks "
-            "WHERE completed_at IS NOT NULL AND started_at IS NOT NULL"
+            "SELECT id, started_at, completed_at FROM tasks WHERE completed_at IS NOT NULL AND started_at IS NOT NULL"
         ).fetchall()
         return [{"id": row[0], "started_at": row[1], "completed_at": row[2]} for row in rows]
 
@@ -222,9 +219,7 @@ class SqliteStore:
         conn = self._get_conn()
         conn.row_factory = sqlite3.Row
         try:
-            cursor_row = conn.execute(
-                "SELECT last_event_id, updated_at FROM ml_cursor WHERE id = 1"
-            ).fetchone()
+            cursor_row = conn.execute("SELECT last_event_id, updated_at FROM ml_cursor WHERE id = 1").fetchone()
 
             now_ms = int(time.time() * 1000)
             preds = conn.execute(
@@ -243,27 +238,21 @@ class SqliteStore:
 
     # --- Write operations (ml_predictions, ml_events only) ---
 
-    def insert_prediction(
-        self, model: str, result: dict, confidence: float, ttl_sec: int | None
-    ) -> None:
+    def insert_prediction(self, model: str, result: dict, confidence: float, ttl_sec: int | None) -> None:
         """Insert a row into ml_predictions."""
         conn = self._get_conn()
         now_ms = int(time.time() * 1000)
         expires_ms = (now_ms + ttl_sec * 1000) if ttl_sec else None
         conn.execute(
-            "INSERT INTO ml_predictions (model, result, confidence, created_at, expires_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO ml_predictions (model, result, confidence, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
             (model, json.dumps(result), round(confidence, 4), now_ms, expires_ms),
         )
 
-    def insert_ml_event(
-        self, kind: str, endpoint: str, routing: str, latency_ms: int
-    ) -> None:
+    def insert_ml_event(self, kind: str, endpoint: str, routing: str, latency_ms: int) -> None:
         """Insert a row into ml_events."""
         conn = self._get_conn()
         conn.execute(
-            "INSERT INTO ml_events (kind, endpoint, routing, latency_ms, ts) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO ml_events (kind, endpoint, routing, latency_ms, ts) VALUES (?, ?, ?, ?, ?)",
             (kind, endpoint, routing, latency_ms, int(time.time() * 1000)),
         )
 
@@ -285,8 +274,7 @@ class SqliteStore:
             "INSERT INTO ml_signals "
             "(signal_type, confidence, evidence, suggested_action, created_at, expires_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (signal_type, round(confidence, 4), json.dumps(evidence),
-             suggested_action, now_ms, expires_ms),
+            (signal_type, round(confidence, 4), json.dumps(evidence), suggested_action, now_ms, expires_ms),
         )
         return cur.lastrowid
 
@@ -302,10 +290,7 @@ class SqliteStore:
                 "ORDER BY s.created_at ASC",
                 (since_ms,),
             ).fetchall()
-            return [
-                {"signal_id": r[0], "signal_type": r[1], "status": r[2], "created_at": r[3]}
-                for r in rows
-            ]
+            return [{"signal_id": r[0], "signal_type": r[1], "status": r[2], "created_at": r[3]} for r in rows]
         except Exception:
             # signal_id column may not exist yet (Go Feature 021)
             logger.debug("get_signal_feedback: suggestions.signal_id not available yet")

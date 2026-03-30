@@ -106,9 +106,7 @@ class CloudTrainer:
             if self.training_lock is not None:
                 self.training_lock.release(tenant_id)
 
-    def _train_tenant_inner(
-        self, tenant_id: str, start: float, started_at: datetime
-    ) -> TrainingRun:
+    def _train_tenant_inner(self, tenant_id: str, start: float, started_at: datetime) -> TrainingRun:
         """Core per-tenant training logic (interval, threshold, train, audit)."""
         # 1. Interval check (cheapest -- avoids all data queries if too recent)
         last_ts = self._get_last_training_ts(tenant_id)
@@ -164,9 +162,7 @@ class CloudTrainer:
             task_events[task["id"]] = events
 
         # 5. Train all models from real data
-        models_trained = self._train_models_from_tasks(
-            tasks, task_events, tenant_id
-        )
+        models_trained = self._train_models_from_tasks(tasks, task_events, tenant_id)
 
         elapsed_ms = int((time.time() - start) * 1000)
         run = TrainingRun(
@@ -267,10 +263,7 @@ class CloudTrainer:
                 x = [feats.get(f, 0.0) for f in STUCK_FEATURES]
                 X_stuck_list.append(x)
                 # Heuristic label: stuck if high test failures AND long time in phase
-                stuck = (
-                    feats["test_failure_count"] > 3
-                    and feats["time_in_phase_sec"] > 600
-                )
+                stuck = feats["test_failure_count"] > 3 and feats["time_in_phase_sec"] > 600
                 y_stuck_list.append(1.0 if stuck else 0.0)
 
             if X_stuck_list:
@@ -367,7 +360,8 @@ class CloudTrainer:
         except Exception:
             logger.warning(
                 "Failed to train next_action model for tenant %s",
-                tenant_id, exc_info=True,
+                tenant_id,
+                exc_info=True,
             )
 
         # File Recommender: rebuild co-occurrence from task file sets
@@ -401,7 +395,8 @@ class CloudTrainer:
         except Exception:
             logger.warning(
                 "Failed to train file_recommender model for tenant %s",
-                tenant_id, exc_info=True,
+                tenant_id,
+                exc_info=True,
             )
 
         return models_trained
@@ -427,9 +422,7 @@ class CloudTrainer:
         )
 
         for i, tenant_id in enumerate(tenants, 1):
-            logger.info(
-                "Processing tenant %d/%d: %s", i, len(tenants), tenant_id
-            )
+            logger.info("Processing tenant %d/%d: %s", i, len(tenants), tenant_id)
             run = self._train_tenant_safe(tenant_id)
             batch.runs.append(run)
 
@@ -515,9 +508,7 @@ class CloudTrainer:
             self._record_audit_event(AGGREGATE_TENANT_ID, run)
             return run
 
-    def _train_aggregate_inner(
-        self, start: float, started_at: datetime
-    ) -> TrainingRun:
+    def _train_aggregate_inner(self, start: float, started_at: datetime) -> TrainingRun:
         """Core aggregate training logic."""
         # 1. Discover opted-in tenants
         tenant_ids = self._discover_opted_in_tenants()
@@ -545,9 +536,7 @@ class CloudTrainer:
             return run
 
         # 3. Pool data from all opted-in tenants
-        all_tasks, task_events, tenant_counts = self._pool_training_data(
-            tenant_ids
-        )
+        all_tasks, task_events, tenant_counts = self._pool_training_data(tenant_ids)
 
         # 4. Apply sampling strategy
         sampled_tasks = self._sample_pooled_data(all_tasks, tenant_counts)
@@ -593,9 +582,7 @@ class CloudTrainer:
 
         return discover_opted_in_tenants(self.data_store)
 
-    def _pool_training_data(
-        self, tenant_ids: list[str]
-    ) -> tuple[list[dict], dict[str, list[dict]], dict[str, int]]:
+    def _pool_training_data(self, tenant_ids: list[str]) -> tuple[list[dict], dict[str, list[dict]], dict[str, int]]:
         """Pool training data from multiple opted-in tenants.
 
         Returns:
@@ -643,9 +630,7 @@ class CloudTrainer:
 
         sampled: list[dict] = []
         for tenant_id in tenant_counts:
-            tenant_tasks = [
-                t for t in all_tasks if t.get("_tenant_id") == tenant_id
-            ]
+            tenant_tasks = [t for t in all_tasks if t.get("_tenant_id") == tenant_id]
 
             if len(tenant_tasks) > max_per:
                 logger.info(
@@ -670,9 +655,7 @@ class CloudTrainer:
     # Helper methods
     # ------------------------------------------------------------------
 
-    def _save_model_to_store(
-        self, model_name: str, model: Any, tenant_id: str
-    ) -> None:
+    def _save_model_to_store(self, model_name: str, model: Any, tenant_id: str) -> None:
         """Serialize a trained model and save via ModelStore with tenant prefix."""
         buf = io.BytesIO()
         joblib.dump(model.model, buf)
@@ -711,8 +694,6 @@ class CloudTrainer:
         """Query completed tasks for a tenant via the DataStore protocol."""
         return self.data_store.get_completed_tasks_for_tenant(tenant_id)
 
-    def _query_events_for_task(
-        self, tenant_id: str, task_id: str
-    ) -> list[dict]:
+    def _query_events_for_task(self, tenant_id: str, task_id: str) -> list[dict]:
         """Query events for a specific task via the DataStore protocol."""
         return self.data_store.get_events_for_task_id(task_id)

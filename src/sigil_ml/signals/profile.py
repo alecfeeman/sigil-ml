@@ -30,7 +30,7 @@ class RollingStat:
     @property
     def std(self) -> float:
         """Standard deviation (square root of variance)."""
-        return self.variance ** 0.5
+        return self.variance**0.5
 
     def update(self, value: float) -> None:
         """Update the rolling statistics with a new observation."""
@@ -70,8 +70,14 @@ class RollingStat:
 
 # Test command prefixes — shared with ActivityClassifier._classify_rules.
 _TEST_PREFIXES = (
-    "pytest", "go test", "npm test", "cargo test",
-    "jest", "vitest", "mocha", "python -m pytest",
+    "pytest",
+    "go test",
+    "npm test",
+    "cargo test",
+    "jest",
+    "vitest",
+    "mocha",
+    "python -m pytest",
 )
 
 
@@ -239,7 +245,7 @@ class BehaviorProfile:
         tools/patterns from persisting indefinitely. Entries that
         decay to zero are removed.
         """
-        decay = self._decay ** 100  # Apply 100 steps of decay at once
+        decay = self._decay**100  # Apply 100 steps of decay at once
 
         decayed_tools: Counter[str] = Counter()
         for tool, count in self.tool_counts.items():
@@ -263,12 +269,9 @@ class BehaviorProfile:
         return {
             "tool_frequency": dict(self.tool_counts.most_common(50)),
             "file_type_distribution": {
-                ext: round(count / total_files, 4)
-                for ext, count in self.file_type_counts.most_common(20)
+                ext: round(count / total_files, 4) for ext, count in self.file_type_counts.most_common(20)
             },
-            "workflow_rhythms": {
-                name: stat.to_dict() for name, stat in self.metrics.items()
-            },
+            "workflow_rhythms": {name: stat.to_dict() for name, stat in self.metrics.items()},
             "active_sources": sorted(self.active_sources),
             "total_events_processed": self.total_events_processed,
             "profile_version": 1,

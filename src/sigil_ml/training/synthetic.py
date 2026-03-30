@@ -99,6 +99,7 @@ def generate_next_action_data(n: int = 500) -> list[list[str]]:
         List of token sequences (each a list of composite action tokens).
     """
     import random
+
     rng = random.Random(42)
 
     # Common workflow patterns
@@ -124,22 +125,21 @@ def generate_next_action_data(n: int = 500) -> list[list[str]]:
     return sequences
 
 
-def generate_file_cooccurrence_data(
-    n_tasks: int = 50, n_files: int = 20
-) -> list[set[str]]:
+def generate_file_cooccurrence_data(n_tasks: int = 50, n_files: int = 20) -> list[set[str]]:
     """Generate synthetic file co-occurrence data for cold start.
 
     Returns:
         List of file sets (each representing files edited in one task).
     """
     import random
+
     rng = random.Random(42)
 
     # Create file clusters that tend to co-occur
     files = [f"src/module_{i}.py" for i in range(n_files)]
     clusters = [
-        set(files[0:4]),   # cluster 1
-        set(files[4:8]),   # cluster 2
+        set(files[0:4]),  # cluster 1
+        set(files[4:8]),  # cluster 2
         set(files[8:12]),  # cluster 3
     ]
 

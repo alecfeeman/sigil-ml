@@ -336,9 +336,7 @@ def extract_workflow_features(classified_events: list[dict], session_info: dict)
 # ---------------------------------------------------------------------------
 
 
-def extract_stuck_features_from_data(
-    task: dict[str, Any], events: list[dict[str, Any]]
-) -> dict[str, float]:
+def extract_stuck_features_from_data(task: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, float]:
     """Extract stuck features from pre-queried task and events data.
 
     Same output as extract_stuck_features() but operates on passed-in
@@ -389,9 +387,7 @@ def extract_stuck_features_from_data(
     }
 
 
-def extract_duration_features_from_data(
-    task: dict[str, Any], events: list[dict[str, Any]]
-) -> dict[str, float]:
+def extract_duration_features_from_data(task: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, float]:
     """Extract duration features from pre-queried data.
 
     Same output as extract_duration_features() but operates on passed-in
@@ -407,9 +403,7 @@ def extract_duration_features_from_data(
     file_count = float(len(files_map)) if isinstance(files_map, dict) else 0.0
 
     # Total edits from events
-    total_edits = float(
-        len([e for e in events if e.get("kind") in ("edit", "file_edit", "save")])
-    )
+    total_edits = float(len([e for e in events if e.get("kind") in ("edit", "file_edit", "save")]))
 
     # Time of day
     started_at = task.get("started_at")

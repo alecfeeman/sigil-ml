@@ -36,9 +36,7 @@ def resolve_mode(cli_mode: str | None = None) -> ServingMode:
     try:
         return ServingMode(raw.strip().lower())
     except ValueError:
-        raise SystemExit(
-            f"Invalid serving mode: {raw!r}. Must be 'local' or 'cloud'."
-        ) from None
+        raise SystemExit(f"Invalid serving mode: {raw!r}. Must be 'local' or 'cloud'.") from None
 
 
 def _data_home() -> Path:

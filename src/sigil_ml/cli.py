@@ -160,8 +160,7 @@ def _handle_cloud_training(args: argparse.Namespace) -> None:
     s3_bucket = os.environ.get("SIGIL_S3_BUCKET")
     if not db_url or not s3_bucket:
         print(
-            "Error: SIGIL_POSTGRES_URL and SIGIL_S3_BUCKET environment variables "
-            "are required for cloud mode",
+            "Error: SIGIL_POSTGRES_URL and SIGIL_S3_BUCKET environment variables are required for cloud mode",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -236,10 +235,7 @@ def _create_data_store(db_url: str) -> object:
         tenant = config.tenant_id()
         return PostgresStore(connection_url=db_url, tenant=tenant)
     except ImportError:
-        raise SystemExit(
-            "Error: PostgresStore not available. "
-            "Install with: pip install sigil-ml[cloud]"
-        ) from None
+        raise SystemExit("Error: PostgresStore not available. Install with: pip install sigil-ml[cloud]") from None
 
 
 def _create_model_store(s3_bucket_name: str) -> object:
@@ -255,10 +251,7 @@ def _create_model_store(s3_bucket_name: str) -> object:
             region=config.aws_region(),
         )
     except ImportError:
-        raise SystemExit(
-            "Error: S3ModelStore not available. "
-            "Install with: pip install sigil-ml[cloud]"
-        ) from None
+        raise SystemExit("Error: S3ModelStore not available. Install with: pip install sigil-ml[cloud]") from None
 
 
 def _build_cloud_training_config(
@@ -273,9 +266,7 @@ def _build_cloud_training_config(
         min_interval_sec=min_interval
         if min_interval is not None
         else int(os.environ.get("SIGIL_ML_TRAIN_MIN_INTERVAL", "3600")),
-        min_tasks=min_tasks
-        if min_tasks is not None
-        else int(os.environ.get("SIGIL_ML_TRAIN_MIN_TASKS", "10")),
+        min_tasks=min_tasks if min_tasks is not None else int(os.environ.get("SIGIL_ML_TRAIN_MIN_TASKS", "10")),
         max_tasks_per_tenant=max_tasks_per_tenant
         if max_tasks_per_tenant is not None
         else int(os.environ.get("SIGIL_ML_TRAIN_MAX_TASKS_PER_TENANT", "1000")),

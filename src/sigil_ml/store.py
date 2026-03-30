@@ -84,15 +84,11 @@ class DataStore(Protocol):
         """Return cursor info and latest non-expired predictions for the /status endpoint."""
         ...
 
-    def insert_prediction(
-        self, model: str, result: dict, confidence: float, ttl_sec: int | None
-    ) -> None:
+    def insert_prediction(self, model: str, result: dict, confidence: float, ttl_sec: int | None) -> None:
         """Insert a row into ml_predictions."""
         ...
 
-    def insert_ml_event(
-        self, kind: str, endpoint: str, routing: str, latency_ms: int
-    ) -> None:
+    def insert_ml_event(self, kind: str, endpoint: str, routing: str, latency_ms: int) -> None:
         """Insert a row into ml_events."""
         ...
 
@@ -186,9 +182,7 @@ def create_store(mode: str | None = None) -> DataStore:
 
         url = config.postgres_url()
         if not url:
-            raise ValueError(
-                "SIGIL_POSTGRES_URL environment variable is required in cloud mode"
-            )
+            raise ValueError("SIGIL_POSTGRES_URL environment variable is required in cloud mode")
         tenant = config.tenant_id()
         return PostgresStore(connection_url=url, tenant=tenant)
 

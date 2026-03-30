@@ -21,10 +21,10 @@ from sigil_ml.store import DataStore
 logger = logging.getLogger(__name__)
 
 # Rate limiting constants
-SIGNAL_TYPE_COOLDOWN_SEC = 300   # 5 minutes per signal type
-SIGNAL_TOTAL_WINDOW_SEC = 300    # 5-minute window for total count
-SIGNAL_TOTAL_MAX = 10            # Max 10 signals per window
-DISMISSED_COOLDOWN_SEC = 1800    # 30-minute cooldown after dismissal
+SIGNAL_TYPE_COOLDOWN_SEC = 300  # 5 minutes per signal type
+SIGNAL_TOTAL_WINDOW_SEC = 300  # 5-minute window for total count
+SIGNAL_TOTAL_MAX = 10  # Max 10 signals per window
+DISMISSED_COOLDOWN_SEC = 1800  # 30-minute cooldown after dismissal
 
 
 class SignalEngine:
@@ -80,22 +80,16 @@ class SignalEngine:
             logger.debug("signal_engine: error in signal processing", exc_info=True)
             return 0
 
-    def _process_events_inner(
-        self, buffer: list[dict], task_context: dict | None
-    ) -> int:
+    def _process_events_inner(self, buffer: list[dict], task_context: dict | None) -> int:
         """Inner processing loop -- separated for error isolation."""
         # 1. Update behavior profile (only unseen events)
-        new_profile_events = [
-            e for e in buffer if e.get("id", 0) > self._last_profile_event_id
-        ]
+        new_profile_events = [e for e in buffer if e.get("id", 0) > self._last_profile_event_id]
         if new_profile_events:
             self.profile.update(new_profile_events)
             self._last_profile_event_id = new_profile_events[-1].get("id", 0)
 
         # 2. Update n-gram model incrementally (only unseen events)
-        new_ngram_events = [
-            e for e in buffer if e.get("id", 0) > self._last_ngram_event_id
-        ]
+        new_ngram_events = [e for e in buffer if e.get("id", 0) > self._last_ngram_event_id]
         if new_ngram_events:
             tokens = [extract_action_token(e) for e in new_ngram_events]
             self.next_action.train_incremental(tokens)
@@ -105,9 +99,7 @@ class SignalEngine:
         signals: list[Signal] = []
         signals.extend(self.pattern_detector.detect(buffer, self.profile))
         signals.extend(self.next_action.check_divergence(buffer, self.profile))
-        signals.extend(
-            self.file_recommender.check(buffer, task_context, self.profile)
-        )
+        signals.extend(self.file_recommender.check(buffer, task_context, self.profile))
 
         # 4. Apply rate limiting and cooldown
         filtered = self._apply_rate_limits(signals)
@@ -127,12 +119,12 @@ class SignalEngine:
                 written += 1
                 logger.info(
                     "signal: type=%s confidence=%.2f id=%d",
-                    signal.signal_type, signal.confidence, signal_id,
+                    signal.signal_type,
+                    signal.confidence,
+                    signal_id,
                 )
             except Exception:
-                logger.debug(
-                    "signal_engine: failed to write signal", exc_info=True
-                )
+                logger.debug("signal_engine: failed to write signal", exc_info=True)
 
         return written
 
@@ -147,16 +139,12 @@ class SignalEngine:
         for signal in signals:
             # Check dismissed cooldown
             if self._is_type_dismissed(signal.signal_type, now):
-                logger.debug(
-                    "signal: suppressed (dismissed) type=%s", signal.signal_type
-                )
+                logger.debug("signal: suppressed (dismissed) type=%s", signal.signal_type)
                 continue
 
             # Check per-type rate limit
             if self._is_type_rate_limited(signal.signal_type, now):
-                logger.debug(
-                    "signal: rate-limited type=%s", signal.signal_type
-                )
+                logger.debug("signal: rate-limited type=%s", signal.signal_type)
                 continue
 
             # Check total rate limit
@@ -177,10 +165,7 @@ class SignalEngine:
 
     def _is_total_rate_limited(self, now: float) -> bool:
         """Check if total signal count exceeds the window limit."""
-        recent_count = sum(
-            1 for _, ts in self._recent_signals
-            if (now - ts) < SIGNAL_TOTAL_WINDOW_SEC
-        )
+        recent_count = sum(1 for _, ts in self._recent_signals if (now - ts) < SIGNAL_TOTAL_WINDOW_SEC)
         return recent_count >= SIGNAL_TOTAL_MAX
 
     def _record_signal(self, signal_type: str) -> None:
@@ -190,9 +175,7 @@ class SignalEngine:
     def _prune_old_records(self, now: float) -> None:
         """Remove expired rate limiting records."""
         cutoff = now - max(SIGNAL_TYPE_COOLDOWN_SEC, SIGNAL_TOTAL_WINDOW_SEC)
-        self._recent_signals = [
-            (st, ts) for st, ts in self._recent_signals if ts > cutoff
-        ]
+        self._recent_signals = [(st, ts) for st, ts in self._recent_signals if ts > cutoff]
 
     # --- Dismissed signal cooldown ---
 

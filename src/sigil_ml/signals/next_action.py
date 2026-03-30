@@ -36,9 +36,7 @@ class NextActionPredictor:
         self._ngrams: dict[tuple[str, ...], Counter[str]] = defaultdict(Counter)
         self._total_tokens: int = 0
 
-    def check_divergence(
-        self, buffer: list[dict], profile: BehaviorProfile
-    ) -> list[Signal]:
+    def check_divergence(self, buffer: list[dict], profile: BehaviorProfile) -> list[Signal]:
         """Check for divergence between predicted and actual behavior.
 
         Args:
@@ -75,17 +73,14 @@ class NextActionPredictor:
         for order in range(self._n, 0, -1):
             if len(recent_tokens) < order - 1:
                 continue
-            context = tuple(recent_tokens[-(order - 1):]) if order > 1 else ()
+            context = tuple(recent_tokens[-(order - 1) :]) if order > 1 else ()
             counts = self._ngrams.get(context)
             if counts is None:
                 continue
             total = sum(counts.values())
             if total < MIN_CONTEXT_COUNT:
                 continue
-            return {
-                token: count / total
-                for token, count in counts.most_common(10)
-            }
+            return {token: count / total for token, count in counts.most_common(10)}
         return None
 
     # --- Incremental training ---
@@ -106,7 +101,7 @@ class NextActionPredictor:
         for order in range(1, self._n + 1):
             for i in range(len(tokens) - order + 1):
                 if order > 1:
-                    context = tuple(tokens[i:i + order - 1])
+                    context = tuple(tokens[i : i + order - 1])
                     next_token = tokens[i + order - 1]
                 else:
                     context = ()
@@ -122,9 +117,7 @@ class NextActionPredictor:
 
     # --- Divergence detection ---
 
-    def _check_latest_divergence(
-        self, tokens: list[str], profile: BehaviorProfile
-    ) -> list[Signal]:
+    def _check_latest_divergence(self, tokens: list[str], profile: BehaviorProfile) -> list[Signal]:
         """Check if the most recent action diverges from prediction."""
         signals: list[Signal] = []
 
@@ -147,22 +140,24 @@ class NextActionPredictor:
         if actual_prob < DIVERGENCE_THRESHOLD and top_prob > 0.3:
             # Divergence: actual action was unexpected AND we had a confident prediction
             confidence = min((top_prob - actual_prob) / top_prob, 0.95)
-            signals.append(Signal(
-                signal_type="action_divergence",
-                confidence=round(confidence, 4),
-                evidence={
-                    "source_model": "next_action",
-                    "predicted_action": top_predicted,
-                    "predicted_probability": round(top_prob, 4),
-                    "actual_action": actual_token,
-                    "actual_probability": round(actual_prob, 4),
-                    "sequence_length": len(tokens),
-                    "context": {
-                        "recent_tokens": tokens[-5:],
+            signals.append(
+                Signal(
+                    signal_type="action_divergence",
+                    confidence=round(confidence, 4),
+                    evidence={
+                        "source_model": "next_action",
+                        "predicted_action": top_predicted,
+                        "predicted_probability": round(top_prob, 4),
+                        "actual_action": actual_token,
+                        "actual_probability": round(actual_prob, 4),
+                        "sequence_length": len(tokens),
+                        "context": {
+                            "recent_tokens": tokens[-5:],
+                        },
                     },
-                },
-                suggested_action=self._action_hint(top_predicted),
-            ))
+                    suggested_action=self._action_hint(top_predicted),
+                )
+            )
 
         return signals
 
@@ -184,6 +179,7 @@ class NextActionPredictor:
     def _extract_tokens(self, buffer: list[dict]) -> list[str]:
         """Convert an event buffer into a list of composite action tokens."""
         from sigil_ml.features import extract_action_token
+
         return [extract_action_token(e) for e in buffer]
 
     # --- Model persistence ---
@@ -193,6 +189,7 @@ class NextActionPredictor:
         import io
 
         import joblib
+
         data = {
             "ngrams": dict(self._ngrams),  # Convert defaultdict to regular dict
             "total_tokens": self._total_tokens,
@@ -214,6 +211,7 @@ class NextActionPredictor:
         import io
 
         import joblib
+
         try:
             data = joblib.load(io.BytesIO(raw))
             loaded_ngrams = data.get("ngrams", {})
@@ -224,13 +222,12 @@ class NextActionPredictor:
             self._n = data.get("n", self._n)
             logger.info(
                 "NextActionPredictor: loaded %d contexts, %d total tokens",
-                len(self._ngrams), self._total_tokens,
+                len(self._ngrams),
+                self._total_tokens,
             )
             return True
         except Exception:
-            logger.warning(
-                "NextActionPredictor: failed to load model", exc_info=True
-            )
+            logger.warning("NextActionPredictor: failed to load model", exc_info=True)
             return False
 
     # --- Serialization helpers (dict-based, no ModelStore) ---

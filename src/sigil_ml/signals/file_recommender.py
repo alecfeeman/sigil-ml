@@ -102,7 +102,8 @@ class FileRecommender:
 
         logger.info(
             "FileRecommender: built matrix from %d tasks, %d files",
-            self._task_count, len(self._file_counts),
+            self._task_count,
+            len(self._file_counts),
         )
         return self._task_count
 
@@ -121,9 +122,7 @@ class FileRecommender:
 
     # --- Conditional probability and recommendation ---
 
-    def _recommend(
-        self, current_files: set[str], repo_root: str | None
-    ) -> list[tuple[str, float]]:
+    def _recommend(self, current_files: set[str], repo_root: str | None) -> list[tuple[str, float]]:
         """Generate file recommendations based on conditional probabilities.
 
         Args:
@@ -207,8 +206,7 @@ class FileRecommender:
                 "source_model": "file_recommender",
                 "current_file": trigger_file,
                 "recommended_files": [
-                    {"path": path, "co_occurrence": round(score, 4)}
-                    for path, score in recommendations
+                    {"path": path, "co_occurrence": round(score, 4)} for path, score in recommendations
                 ],
                 "context": {
                     "repo": repo_root,
@@ -225,6 +223,7 @@ class FileRecommender:
         import io
 
         import joblib
+
         data = {
             "cooccurrence": dict(self._cooccurrence),
             "file_counts": dict(self._file_counts),
@@ -235,7 +234,8 @@ class FileRecommender:
         model_store.save("file_recommender", buf.getvalue())
         logger.info(
             "FileRecommender: saved matrix with %d files, %d tasks",
-            len(self._file_counts), self._task_count,
+            len(self._file_counts),
+            self._task_count,
         )
 
     def load(self, model_store: ModelStore) -> bool:
@@ -246,6 +246,7 @@ class FileRecommender:
         import io
 
         import joblib
+
         try:
             data = joblib.load(io.BytesIO(raw))
             loaded_co = data.get("cooccurrence", {})
@@ -256,13 +257,12 @@ class FileRecommender:
             self._task_count = data.get("task_count", 0)
             logger.info(
                 "FileRecommender: loaded matrix with %d files, %d tasks",
-                len(self._file_counts), self._task_count,
+                len(self._file_counts),
+                self._task_count,
             )
             return True
         except Exception:
-            logger.warning(
-                "FileRecommender: failed to load model", exc_info=True
-            )
+            logger.warning("FileRecommender: failed to load model", exc_info=True)
             return False
 
     # --- Serialization helpers (dict-based, no ModelStore) ---
@@ -270,9 +270,7 @@ class FileRecommender:
     def to_dict(self) -> dict[str, Any]:
         """Serialize co-occurrence state to a JSON-compatible dict."""
         return {
-            "cooccurrence": {
-                f: dict(counts) for f, counts in self._cooccurrence.items()
-            },
+            "cooccurrence": {f: dict(counts) for f, counts in self._cooccurrence.items()},
             "file_counts": dict(self._file_counts),
             "task_count": self._task_count,
         }

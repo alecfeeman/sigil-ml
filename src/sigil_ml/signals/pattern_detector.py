@@ -47,14 +47,9 @@ class PatternDetector:
 
         Returns True if at least one metric has sufficient observations.
         """
-        return any(
-            stat.count >= self._min_observations
-            for stat in profile.metrics.values()
-        )
+        return any(stat.count >= self._min_observations for stat in profile.metrics.values())
 
-    def detect(
-        self, buffer: list[dict], profile: BehaviorProfile
-    ) -> list[Signal]:
+    def detect(self, buffer: list[dict], profile: BehaviorProfile) -> list[Signal]:
         """Run pattern detection on the current event buffer.
 
         Args:
@@ -74,9 +69,7 @@ class PatternDetector:
 
     # --- Z-score detection (cold start) ---
 
-    def _detect_zscore(
-        self, buffer: list[dict], profile: BehaviorProfile
-    ) -> list[Signal]:
+    def _detect_zscore(self, buffer: list[dict], profile: BehaviorProfile) -> list[Signal]:
         """Detect deviations using per-metric z-scores."""
         signals: list[Signal] = []
         current_metrics = self._compute_current_metrics(buffer)
@@ -92,12 +85,14 @@ class PatternDetector:
 
             if abs(z) > self._z_threshold:
                 confidence = min(abs(z) / 4.0, 0.95)
-                signals.append(Signal(
-                    signal_type=f"{name}_deviation",
-                    confidence=round(confidence, 4),
-                    evidence=self._build_evidence(name, value, stat, z),
-                    suggested_action=self._infer_action(name, z),
-                ))
+                signals.append(
+                    Signal(
+                        signal_type=f"{name}_deviation",
+                        confidence=round(confidence, 4),
+                        evidence=self._build_evidence(name, value, stat, z),
+                        suggested_action=self._infer_action(name, z),
+                    )
+                )
 
         return signals
 
@@ -138,9 +133,7 @@ class PatternDetector:
 
     # --- Evidence generation ---
 
-    def _build_evidence(
-        self, metric: str, observed: float, stat: RollingStat, z: float
-    ) -> dict[str, Any]:
+    def _build_evidence(self, metric: str, observed: float, stat: RollingStat, z: float) -> dict[str, Any]:
         """Build structured evidence dict for LLM rendering."""
         return {
             "source_model": "pattern_detector",
@@ -174,6 +167,7 @@ class PatternDetector:
             feature_matrix: numpy array of behavioral feature vectors.
         """
         from sklearn.ensemble import IsolationForest
+
         self._isolation_forest = IsolationForest(
             n_estimators=100,
             contamination="auto",
@@ -193,6 +187,7 @@ class PatternDetector:
         import io
 
         import joblib
+
         buf = io.BytesIO()
         joblib.dump(self._isolation_forest, buf)
         model_store.save("pattern_detector", buf.getvalue())
@@ -205,13 +200,12 @@ class PatternDetector:
         import io
 
         import joblib
+
         self._isolation_forest = joblib.load(io.BytesIO(data))
         self._is_trained = True
         return True
 
-    def _detect_ml(
-        self, buffer: list[dict], profile: BehaviorProfile
-    ) -> list[Signal]:
+    def _detect_ml(self, buffer: list[dict], profile: BehaviorProfile) -> list[Signal]:
         """ML-based detection using IsolationForest (stub).
 
         Active only after train() is called with sufficient data.
@@ -222,7 +216,5 @@ class PatternDetector:
             # For now, fall back to z-score
             return self._detect_zscore(buffer, profile)
         except Exception:
-            logger.debug(
-                "PatternDetector: ML detection failed, falling back to z-score"
-            )
+            logger.debug("PatternDetector: ML detection failed, falling back to z-score")
             return self._detect_zscore(buffer, profile)

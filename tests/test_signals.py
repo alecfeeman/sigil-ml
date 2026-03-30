@@ -307,12 +307,14 @@ class TestNextActionPredictor:
         # Now create a buffer that ends with an unexpected token
         events = []
         for i in range(10):
-            events.append(_make_event(
-                category="editing" if i % 3 == 0 else "verifying" if i % 3 == 1 else "integrating",
-                kind="file" if i % 3 == 0 else "terminal" if i % 3 == 1 else "git",
-                payload={"path": "a.py"} if i % 3 == 0 else {"cmd": "pytest"} if i % 3 == 1 else {},
-                event_id=i,
-            ))
+            events.append(
+                _make_event(
+                    category="editing" if i % 3 == 0 else "verifying" if i % 3 == 1 else "integrating",
+                    kind="file" if i % 3 == 0 else "terminal" if i % 3 == 1 else "git",
+                    payload={"path": "a.py"} if i % 3 == 0 else {"cmd": "pytest"} if i % 3 == 1 else {},
+                    event_id=i,
+                )
+            )
         # Override last event to be something unexpected
         events[-1]["_category"] = "idle"
         events[-1]["kind"] = "process"

@@ -35,8 +35,7 @@ QUALITY_TTL_SEC = 120  # 2-minute expiry for quality
 class EventPoller:
     """Polls sigild's events table and writes predictions to ml_predictions."""
 
-    def __init__(self, store: DataStore, models: dict[str, Any],
-                 signal_engine: SignalEngine | None = None) -> None:
+    def __init__(self, store: DataStore, models: dict[str, Any], signal_engine: SignalEngine | None = None) -> None:
         self.store = store
         self.stuck = models["stuck"]
         self.activity = models["activity"]
@@ -149,7 +148,9 @@ class EventPoller:
 
         # Activity summary — classify and summarize the buffer.
         activity_result = self._activity_summary()
-        self.store.insert_prediction("activity", activity_result, activity_result.get("confidence", 0.5), PREDICTION_TTL_SEC)
+        self.store.insert_prediction(
+            "activity", activity_result, activity_result.get("confidence", 0.5), PREDICTION_TTL_SEC
+        )
 
         # Workflow state prediction — replaces old suggestion policy.
         session_info = self._session_info(task_id)

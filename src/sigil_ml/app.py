@@ -87,7 +87,8 @@ class AppState:
         if model is not None:
             logger.debug(
                 "model-resolve: cache_hit tenant=%s model=%s",
-                tenant_id, model_name,
+                tenant_id,
+                model_name,
             )
             return model
 
@@ -97,21 +98,21 @@ class AppState:
             self.model_cache.put(tenant_id, model_name, model)
             logger.info(
                 "model-resolve: cache_miss+loaded tenant=%s model=%s",
-                tenant_id, model_name,
+                tenant_id,
+                model_name,
             )
             return model
 
         logger.info(
             "model-resolve: cache_miss+fallback tenant=%s model=%s",
-            tenant_id, model_name,
+            tenant_id,
+            model_name,
         )
         return None
 
     def count_request(self, tenant_id: str) -> None:
         """Increment the request counter for a tenant."""
-        self.request_counters[tenant_id] = (
-            self.request_counters.get(tenant_id, 0) + 1
-        )
+        self.request_counters[tenant_id] = self.request_counters.get(tenant_id, 0) + 1
 
 
 def create_app(mode: ServingMode | None = None) -> FastAPI:

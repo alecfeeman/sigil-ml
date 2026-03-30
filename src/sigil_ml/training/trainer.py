@@ -181,6 +181,7 @@ class Trainer:
         X = np.array(X_list)
 
         from sigil_ml.signals.pattern_detector import PatternDetector
+
         detector = PatternDetector()
         detector.train(X)  # IsolationForest is unsupervised
         detector.save(self._model_store)
@@ -227,6 +228,7 @@ class Trainer:
 
         # Create classifier once before the loop
         from sigil_ml.models.activity import ActivityClassifier
+
         classifier = ActivityClassifier(model_store=self._model_store)
 
         for task_id in task_ids:
