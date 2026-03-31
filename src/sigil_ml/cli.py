@@ -10,6 +10,7 @@ import sys
 import uvicorn
 
 from sigil_ml.config import resolve_mode
+from sigil_ml.logging_config import setup_logging
 from sigil_ml.storage.model_store import model_store_factory
 from sigil_ml.store import create_store
 from sigil_ml.store_sqlite import SqliteStore
@@ -85,6 +86,9 @@ def main() -> None:
     sub.add_parser("health-check", help="Check if server is running")
 
     args = parser.parse_args()
+
+    # Initialize file + console logging for all commands
+    setup_logging()
 
     if args.command == "serve":
         mode = resolve_mode(args.mode)
